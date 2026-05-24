@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "vtermux",
+  "project_id": "53742e8e-aa2a-499a-bbac-4efb6cc4b52b"
+}
