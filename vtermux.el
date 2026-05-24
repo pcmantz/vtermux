@@ -3,13 +3,14 @@
 ;; Author: Paul C. Mantz
 ;; Keywords: terminals, processes
 ;; Version: 0.1
-;; Package-Requires: ((emacs "29.1") (vterm "0.0") (project "0.3.0"))
+;; Package-Requires: ((emacs "29.1") (vterm "0.0"))
 
 ;;; Commentary:
 ;; Provides `vtermux-define', a macro to declaratively define
-;; project-scoped vterm instances for arbitrary CLI/TUI programs.
-;; Think "tmux for Emacs" — each program gets its own buffer family,
-;; scoped to project root, with automatic label management.
+;; project-scoped or directory-scoped vterm instances for arbitrary
+;; CLI/TUI programs.  Think "tmux for Emacs" — each program gets its
+;; own buffer family, scoped by directory method, with automatic
+;; label management.
 ;;
 ;; Basic usage:
 ;;
@@ -25,17 +26,23 @@
 ;;     :args "-m")
 ;;
 ;; Each definition generates the following commands:
-;;   NAME        – launch an instance in the current project.
-;;                 If no instance exists, creates one. If any exist,
-;;                 prompts for a label (defaults to first unused number).
+;;   NAME        – launch an instance.  If no instance exists, creates
+;;                 one.  If any exist, prompts for a label (defaults to
+;;                 first unused number).
 ;;   NAME-new    – always create a new instance; always prompts for label.
 ;;   NAME-select – pick any live instance via completing-read.
-;;   NAME-next   – cycle forward through instances in the current project.
-;;   NAME-prev   – cycle backward through instances in the current project.
+;;   NAME-next   – cycle forward through instances in the current scope.
+;;   NAME-prev   – cycle backward through instances in the current scope.
+;;
+;; Directory resolution (see `vtermux-command-directory'):
+;;   :project — scope to the current project root (default)
+;;   :buffer  — scope to the current buffer's directory
+;;   :prompt  — always prompt for a directory
+;; Prefix the command with \\[universal-argument] to prompt regardless.
 ;;
 ;; Buffer naming:
-;;   *<bufname> - <project-root>*              — unnamed instance
-;;   *<bufname> - <project-root> (<label>)*    — labeled instance
+;;   *<bufname> - <directory>*                 — unnamed instance
+;;   *<bufname> - <directory> (<label>)*       — labeled instance
 ;;
 ;; The label prompt defaults to the next unused integer when labels
 ;; follow the "1", "2", "3"… convention, matching tmux behavior.
@@ -47,7 +54,6 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'vterm)
-(require 'project)
 
 (defgroup vtermux nil
   "Manage multiple vterm-based application instances."
@@ -58,10 +64,38 @@
   :type 'boolean
   :group 'vtermux)
 
-(defun vtermux--project-root ()
-  "Get the project root for the current directory."
-  (project-root
-   (or (project-current) `(transient . ,default-directory))))
+(defcustom vtermux-command-directory :project
+  "Method for resolving the directory vtermux commands run in.
+`:project' — use `project-root' of the current project (default)
+`:buffer'  — use `default-directory' of the current buffer
+`:prompt'  — always prompt for a directory
+Overridden per-definition with the `:directory' keyword.
+A prefix arg (\\[universal-argument]) always prompts."
+  :type '(choice (const :tag "Project root" :project)
+                 (const :tag "Buffer directory" :buffer)
+                 (const :tag "Always prompt" :prompt))
+  :group 'vtermux)
+
+(defun vtermux--command-directory (&optional method prompt)
+  "Resolve working directory for a vtermux command.
+METHOD is `:project', `:buffer', `:prompt', or nil (use global default).
+When PROMPT is non-nil, always ask the user.
+Falls back to prompting the user on failure."
+  (condition-case nil
+      (if (or prompt (eq method :prompt))
+          (read-directory-name "Directory: " default-directory nil t)
+        (let ((effective (if (memq method '(:project :buffer :prompt))
+                             method
+                           vtermux-command-directory)))
+          (pcase effective
+            (:project
+             (require 'project)
+             (project-root
+              (or (project-current) `(transient . ,default-directory))))
+            (:buffer default-directory)
+            (_ default-directory))))
+    (error
+     (read-directory-name "Directory: " default-directory nil t))))
 
 (defun vtermux--next-label (buffers)
   "Return the first unused positive integer label for BUFFERS.
@@ -81,6 +115,103 @@ Extracts numeric labels from buffer names matching the vtermux
            (setq i (1+ n)))
          i)))))
 
+;;; Shared implementation functions
+
+(defun vtermux--format-buffer-name (bufname directory &optional label)
+  "Format a vtermux buffer name.
+BUFNAME is the base buffer name.  DIRECTORY is the working directory.
+LABEL is an optional disambiguating string."
+  (let ((root (abbreviate-file-name directory)))
+    (if label
+        (format "*%s - %s (%s)*" bufname root label)
+      (format "*%s - %s*" bufname root))))
+
+(defun vtermux--buffers (bufname buf-list &optional directory)
+  "Return live vtermux buffers for BUFNAME in BUF-LIST matching DIRECTORY.
+When DIRECTORY is nil, return all live buffers."
+  (if (null directory)
+      (cl-remove-if-not #'buffer-live-p buf-list)
+    (let ((prefix (format "*%s - %s" bufname (abbreviate-file-name directory))))
+      (cl-remove-if-not
+       (lambda (buf)
+         (and (buffer-live-p buf)
+              (string-prefix-p prefix (buffer-name buf))))
+       buf-list))))
+
+(defun vtermux--create-buffer (prog bufname args buf-list-sym directory &optional label)
+  "Create a vterm buffer running PROG with ARGS at DIRECTORY.
+BUFNAME is the base buffer name.  BUF-LIST-SYM is the symbol whose
+value holds the buffer list for this application.
+LABEL is an optional disambiguating string."
+  (let* ((name (vtermux--format-buffer-name bufname directory label))
+         (default-directory directory)
+         (vterm-shell (if args (format "%s %s" prog args) prog))
+         (buffer (generate-new-buffer name)))
+    (with-current-buffer buffer
+      (vterm-mode)
+      (when vtermux-kill-buffer-on-exit
+        (when-let* ((proc (get-buffer-process (current-buffer))))
+          (set-process-sentinel
+           proc
+           (lambda (proc change)
+             (when (string-match "\\(finished\\|exited\\)" change)
+               (kill-buffer (process-buffer proc)))))))
+      (add-hook 'kill-buffer-hook
+                (lambda ()
+                  (set buf-list-sym
+                       (delq (current-buffer) (symbol-value buf-list-sym))))
+                nil t))
+    (set buf-list-sym (nconc (symbol-value buf-list-sym) (list buffer)))
+    buffer))
+
+(defun vtermux--launch (prog bufname args buf-list-sym directory)
+  "Launch or reuse a PROG instance at DIRECTORY.
+If instances exist, prompts for a label and creates a new one."
+  (let* ((buf-list (symbol-value buf-list-sym))
+         (existing (vtermux--buffers bufname buf-list directory)))
+    (if existing
+        (let* ((default-label (vtermux--next-label existing))
+               (label (read-string (format "Label for new %s instance: " prog)
+                                   nil nil default-label)))
+          (switch-to-buffer
+           (vtermux--create-buffer prog bufname args buf-list-sym directory label)))
+      (switch-to-buffer
+       (vtermux--create-buffer prog bufname args buf-list-sym directory)))))
+
+(defun vtermux--launch-new (prog bufname args buf-list-sym directory)
+  "Create a new PROG instance at DIRECTORY, always prompting for a label."
+  (let* ((buf-list (symbol-value buf-list-sym))
+         (existing (vtermux--buffers bufname buf-list directory))
+         (default-label (vtermux--next-label existing))
+         (label (read-string (format "Label for new %s instance: " prog)
+                             nil nil default-label)))
+    (switch-to-buffer
+     (vtermux--create-buffer prog bufname args buf-list-sym directory label))))
+
+(defun vtermux--select (prog buf-list-sym)
+  "Select a PROG buffer with completing-read."
+  (let ((buffers (cl-remove-if-not #'buffer-live-p (symbol-value buf-list-sym))))
+    (if buffers
+        (switch-to-buffer
+         (completing-read (format "%s instance: " prog)
+                          (mapcar #'buffer-name buffers) nil t))
+      (message (format "No %s instances running." prog)))))
+
+(defun vtermux--cycle (prog bufname args buf-list-sym directory direction offset)
+  "Switch DIRECTION by OFFSET in the PROG buffer list scoped to DIRECTORY.
+When no buffers exist in DIRECTORY, delegate to `vtermux--launch'."
+  (let* ((buf-list (symbol-value buf-list-sym))
+         (buffers (vtermux--buffers bufname buf-list directory)))
+    (if (null buffers)
+        (vtermux--launch prog bufname args buf-list-sym directory)
+      (let* ((len (length buffers))
+             (idx (cl-position (current-buffer) buffers))
+             (target (mod (if (eq direction 'next)
+                              (+ (or idx -1) offset)
+                            (- (or idx 1) offset))
+                          len)))
+        (switch-to-buffer (nth target buffers))))))
+
 ;;;###autoload
 (defmacro vtermux-define (name &rest args)
   "Define a vtermux application NAME.
@@ -90,13 +221,21 @@ Generated commands:
   NAME        – launch an instance (prompts for label when one exists)
   NAME-new    – always create a new instance with label prompt
   NAME-select – pick a live instance via completing-read
-  NAME-next   – cycle forward through current project instances
-  NAME-prev   – cycle backward through current project instances
+  NAME-next   – cycle forward through current instances
+  NAME-prev   – cycle backward through current instances
 
 Keyword arguments:
-  :program STRING    - executable to run (default: (symbol-name NAME))
-  :buffer-name STRING - base buffer name (default: (symbol-name NAME))
-  :args STRING       - command line arguments string (default: nil)"
+  :program STRING      - executable to run (default: (symbol-name NAME))
+  :buffer-name STRING  - base buffer name (default: (symbol-name NAME))
+  :args STRING         - command line arguments string (default: nil)
+  :directory SYMBOL    - directory resolution method: `:project',
+                         `:buffer', or `:prompt'
+                         (default: `vtermux-command-directory')
+
+Directory resolution:
+  With \\[universal-argument], always prompted for a directory.
+  Otherwise uses the per-definition `:directory' value or falls back
+  to `vtermux-command-directory'.  On error, prompts the user."
   (declare (indent 1))
   (let* ((prog (or (plist-get args :program) (symbol-name name)))
          (bufname (or (plist-get args :buffer-name) (symbol-name name)))
@@ -105,17 +244,15 @@ Keyword arguments:
          (bufname-var (intern (format "%s-buffer-name" name)))
          (args-var (intern (format "%s-args" name)))
          (buf-list-var (intern (format "%s-buffer-list" name)))
+         (directory-var (intern (format "%s-command-directory" name)))
+         (directory-val (if (plist-member args :directory)
+                            (plist-get args :directory)
+                          'default))
          (fn (intern (symbol-name name)))
          (fn-new (intern (format "%s-new" name)))
          (fn-select (intern (format "%s-select" name)))
          (fn-next (intern (format "%s-next" name)))
-         (fn-prev (intern (format "%s-prev" name)))
-         (fn--fmt-name (intern (format "%s--format-buffer-name" name)))
-         (fn--proj-bufs (intern (format "%s--project-buffers" name)))
-         (fn--create (intern (format "%s--create-buffer" name)))
-         (fn--handle-close (intern (format "%s--handle-close" name)))
-         (fn--kill-hook (intern (format "%s--kill-buffer-hook" name)))
-         (fn--switch (intern (format "%s--switch" name))))
+         (fn-prev (intern (format "%s-prev" name))))
     `(progn
        (defcustom ,prog-var ,prog
          ,(format "Program to run for `%s'." name)
@@ -131,126 +268,51 @@ Keyword arguments:
          :group 'vtermux)
        (defvar ,buf-list-var nil
          ,(format "List of `%s' vterm buffers." name))
+       (defvar ,directory-var ',directory-val
+         ,(format "Directory method for `%s' (`:project', `:buffer', `:prompt', or default)." name))
 
-       (defun ,fn--fmt-name (project-root &optional label)
-          ,(concat
-            (format "Format buffer name for `%s'.\n\n" name)
-            "PROJECT-ROOT is the abbreviated project directory.
-         LABEL is an optional disambiguating string for multiple instances.")
-         (let ((root (abbreviate-file-name project-root)))
-           (if label
-               (format "*%s - %s (%s)*" ,bufname-var root label)
-             (format "*%s - %s*" ,bufname-var root))))
-
-       (defun ,fn--proj-bufs (&optional project-root)
-         ,(format "Return live `%s' buffers for PROJECT-ROOT." name)
-         (let* ((root (abbreviate-file-name
-                       (or project-root (vtermux--project-root))))
-                (prefix (format "*%s - %s" ,bufname-var root)))
-           (cl-remove-if-not
-            (lambda (buf)
-              (and (buffer-live-p buf)
-                   (string-prefix-p prefix (buffer-name buf))))
-            ,buf-list-var)))
-
-       (defun ,fn--create (project-root &optional label)
-         ,(format "Create a `%s' vterm buffer at PROJECT-ROOT." name)
-         (let* ((name (,fn--fmt-name project-root label))
-                (default-directory project-root)
-                (vterm-shell (if ,args-var
-                                 (format "%s %s" ,prog-var ,args-var)
-                               ,prog-var))
-                (buffer (generate-new-buffer name)))
-           (with-current-buffer buffer
-             (vterm-mode)
-             (,fn--handle-close)
-             (add-hook 'kill-buffer-hook #',fn--kill-hook nil t))
-           (setq ,buf-list-var
-                 (nconc ,buf-list-var (list buffer)))
-           buffer))
-
-       (defun ,fn--handle-close ()
-          ,(concat
-            (format "Kill buffer when the `%s' process exits.\n\n" name)
-            "Only acts when `vtermux-kill-buffer-on-exit' is non-nil.")
-         (when-let* ((proc (get-buffer-process (current-buffer))))
-           (set-process-sentinel
-            proc
-            (lambda (proc change)
-              (when (and vtermux-kill-buffer-on-exit
-                         (string-match "\\(finished\\|exited\\)" change))
-                (kill-buffer (process-buffer proc)))))))
-
-       (defun ,fn--kill-hook ()
-         ,(format "Remove current buffer from `%s' list." name)
-         (setq ,buf-list-var
-               (delq (current-buffer) ,buf-list-var)))
-
-        ;;;###autoload
-        (defun ,fn ()
+       ;;;###autoload
+         (defun ,fn (&optional arg)
            ,(concat
-             (format "Launch %s in the current project.\n\n" prog)
-             "If no instance exists for the project, create one.
-          If instances exist, prompt for a label and create a new one.")
-          (interactive)
-          (let* ((root (vtermux--project-root))
-                 (existing (,fn--proj-bufs root)))
-            (if existing
-                (let ((default-label (vtermux--next-label existing)))
-                  (switch-to-buffer
-                   (,fn--create root (read-string
-                                      ,(format "Label for new %s instance: " prog)
-                                      nil nil default-label))))
-              (switch-to-buffer (,fn--create root)))))
+             (format "Launch %s.\n\n" prog)
+             "With \\[universal-argument], prompt for a directory.
+        Otherwise uses the configured directory method.")
+          (interactive "P")
+          (vtermux--launch ,prog-var ,bufname-var ,args-var
+                           ',buf-list-var
+                           (vtermux--command-directory ,directory-var arg)))
 
-        ;;;###autoload
-       (defun ,fn-new ()
-          ,(format "Create a new %s instance in the current project." prog)
-          (interactive)
-          (let* ((root (vtermux--project-root))
-                 (existing (,fn--proj-bufs root))
-                 (default-label (vtermux--next-label existing)))
-            (switch-to-buffer
-             (,fn--create root (read-string
-                                ,(format "Label for new %s instance: " prog)
-                                nil nil default-label)))))
+       ;;;###autoload
+       (defun ,fn-new (&optional arg)
+         ,(format "Create a new %s instance." prog)
+         (interactive "P")
+         (vtermux--launch-new ,prog-var ,bufname-var ,args-var
+                              ',buf-list-var
+                              (vtermux--command-directory ,directory-var arg)))
 
        ;;;###autoload
        (defun ,fn-select ()
          ,(format "Select a %s buffer with completing-read." prog)
          (interactive)
-         (let ((buffers (cl-remove-if-not #'buffer-live-p ,buf-list-var)))
-           (if buffers
-               (switch-to-buffer
-                (completing-read ,(format "%s instance: " prog)
-                                 (mapcar #'buffer-name buffers) nil t))
-             (message ,(format "No %s instances running." prog)))))
+         (vtermux--select ,prog-var ',buf-list-var))
 
        ;;;###autoload
        (defun ,fn-next (&optional offset)
          ,(format "Switch to the next %s buffer, skipping OFFSET buffers." prog)
          (interactive "P")
-         (,fn--switch 'next (or offset 1)))
+         (vtermux--cycle ,prog-var ,bufname-var ,args-var
+                         ',buf-list-var
+                         (vtermux--command-directory ,directory-var)
+                         'next (or offset 1)))
 
        ;;;###autoload
        (defun ,fn-prev (&optional offset)
          ,(format "Switch to the previous %s buffer, skipping OFFSET buffers." prog)
          (interactive "P")
-         (,fn--switch 'prev (or offset 1)))
-
-       (defun ,fn--switch (direction offset)
-          ,(format "Switch DIRECTION by OFFSET in the %s buffer list." name)
-          (let* ((root (vtermux--project-root))
-                 (buffers (,fn--proj-bufs root)))
-            (if (null buffers)
-                (,fn)
-              (let* ((len (length buffers))
-                     (idx (cl-position (current-buffer) buffers))
-                     (target (mod (if (eq direction 'next)
-                                     (+ (or idx -1) offset)
-                                   (- (or idx 1) offset))
-                                 len)))
-                (switch-to-buffer (nth target buffers))))))
+         (vtermux--cycle ,prog-var ,bufname-var ,args-var
+                         ',buf-list-var
+                         (vtermux--command-directory ,directory-var)
+                         'prev (or offset 1)))
 
        (let ((cell (assq ',name vtermux--registry)))
          (if cell
