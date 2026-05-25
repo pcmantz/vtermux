@@ -52,12 +52,10 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+mise test            # runs bin/test
+# or directly:
+emacs -batch -L . -l vtermux-test.el -f ert-run-tests-batch-and-exit
 ```
 
 ## Architecture Overview

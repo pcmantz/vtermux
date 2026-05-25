@@ -1,0 +1,4 @@
+# mise.toml
+
+[task_config]
+includes = ["bin"]

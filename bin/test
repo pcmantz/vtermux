@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -e
+set -u
+set -o pipefail
+
+emacs -batch -L . -l vtermux-test.el -f ert-run-tests-batch-and-exit
