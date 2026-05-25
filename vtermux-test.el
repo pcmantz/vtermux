@@ -519,3 +519,23 @@
   (let ((vtermux--registry '((a . (a-program a "a"))
                              (b . (b-program b "b")))))
     (should (equal (vtermux--next-key 'ab) "ab"))))
+
+;; ─── vtermux-run ────────────────────────────────────────────────────
+
+(ert-deftest vtermux-test--run-picks-from-registry ()
+  (vtermux-test--with-mocks
+   (lambda ()
+     (let* ((vtermux--registry nil)
+            (vtermux-command-directory :buffer)
+            (vtermux-kill-buffer-on-exit nil))
+       (eval (macroexpand '(vtermux-define btop :key ?b)))
+       (setq vtermux-test--completing-read-result "b  btop")
+       (cl-letf (((symbol-function 'vterm-mode) #'vtermux-test--capture-vterm-shell))
+         (vtermux-run))
+       (unwind-protect
+           (progn
+             (should (bufferp vtermux-test--switched-buffer))
+             (should (string-prefix-p "*btop - "
+                                      (buffer-name vtermux-test--switched-buffer))))
+         (when (bufferp vtermux-test--switched-buffer)
+           (kill-buffer vtermux-test--switched-buffer)))))))

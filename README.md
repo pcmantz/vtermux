@@ -99,7 +99,7 @@ for apps registered with a `:key`.
 
 | Command | Description |
 |---|---|
-| `vtermux-run` | Single-character dispatch. Apps with a `:key` appear in the prompt. Press `?` for help. |
+| `vtermux-run` | Select a vtermux app via `completing-read`. Integrates with ivy/helm/vertico. |
 
 ### Directory resolution
 

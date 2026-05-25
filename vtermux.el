@@ -371,67 +371,31 @@ string for `vtermux-run', or nil.")
 
 ;;;###autoload
 (defun vtermux-run (&optional arg)
-  "Launch a vtermux application by prefix-matching its `:key'.
+  "Launch a vtermux application, selected via `completing-read'.
 
-Type characters to narrow the dispatch prefix.  `?' shows help,
-`DEL' backs up one character.  Dispatches when exactly one app
-matches.
+Apps with a `:key' show it as a prefix, so typing the key narrows
+the selection.  Integrates with ivy, helm, vertico, etc.
 
 With \\[universal-argument], prompt for a directory.
 Otherwise uses the configured directory method."
   (interactive "P")
-  (let ((prefix "")
-        (keys-alist (delq nil
-                          (mapcar (lambda (e)
-                                    (when-let* ((k (nth 2 (cdr e))))
-                                      (cons k (car e))))
-                                  vtermux--registry))))
-    (if (null keys-alist)
-        (user-error "No vtermux apps have a :key set")
-      (while t
-        (let* ((filtered
-                (cl-remove-if-not
-                 (lambda (e) (string-prefix-p prefix (car e)))
-                 keys-alist))
-               (exact
-                (cl-remove-if-not
-                 (lambda (e) (equal prefix (car e)))
-                 filtered)))
-          (cond
-           ((= (length exact) 1)
-            (let* ((entry (assq (cdar exact) vtermux--registry))
-                   (app (car entry))
-                   (directory (vtermux--command-directory nil arg)))
-              (vtermux--launch (symbol-value (cadr entry))
-                               (symbol-value (intern (format "%s-buffer-name" app)))
-                               (symbol-value (intern (format "%s-args" app)))
-                               (intern (format "%s-buffer-list" app))
-                               directory))
-            (cl-return))
-           ((null filtered)
-            (user-error "No vtermux app matching key %S" prefix))
-           (t
-            (let ((ch (read-char (format
-                                  (if (zerop (length prefix))
-                                      "vtermux: "
-                                    "vtermux [%s]: ")
-                                  prefix))))
-              (cond
-               ((eq ch ??)
-                 (with-help-window (get-buffer-create "*vtermux-run help*")
-                   (princ "vtermux-run keys:\n\n")
-                   (dolist (e (sort (copy-sequence keys-alist)
-                                    (lambda (a b)
-                                      (if (string= (car a) "?")
-                                          nil
-                                        (string< (car a) (car b))))))
-                     (princ (format "%s:\t%s\n" (car e) (cdr e))))))
-               ((= ch ?\d)
-                (when (> (length prefix) 0)
-                  (setq prefix (substring prefix 0 (1- (length prefix))))))
-               ((characterp ch)
-                (setq prefix (concat prefix (string ch))))
-               (t nil))))))))))
+  (let* ((candidates
+          (mapcar (lambda (entry)
+                    (let* ((app (car entry))
+                           (key (nth 2 (cdr entry)))
+                           (name (symbol-name app))
+                           (display (if key (format "%s  %s" key name) name)))
+                      (cons display app)))
+                  vtermux--registry))
+         (display (completing-read "vtermux: " candidates nil t))
+         (app (cdr (assoc display candidates)))
+         (entry (assq app vtermux--registry))
+         (directory (vtermux--command-directory nil arg)))
+    (vtermux--launch (symbol-value (cadr entry))
+                     (symbol-value (intern (format "%s-buffer-name" app)))
+                     (symbol-value (intern (format "%s-args" app)))
+                     (intern (format "%s-buffer-list" app))
+                     directory)))
 
 (provide 'vtermux)
 ;;; vtermux.el ends here
