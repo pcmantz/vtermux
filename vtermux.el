@@ -215,6 +215,31 @@ When no buffers exist in DIRECTORY, delegate to `vtermux--launch'."
                           len)))
         (switch-to-buffer (nth target buffers))))))
 
+(defun vtermux--next-key (name)
+  "Return a one or two character default dispatch key for NAME."
+  (let* ((used (delq nil (mapcar (lambda (e) (nth 2 (cdr e))) vtermux--registry)))
+         (str (symbol-name name))
+         (len (length str))
+         key)
+    ;; First pass: single characters
+    (catch 'found
+      (dotimes (i len)
+        (let ((ch (string (aref str i))))
+          (unless (member ch used)
+            (setq key ch)
+            (throw 'found nil)))))
+    ;; Second pass: two-letter combos
+    (unless key
+      (catch 'found
+        (dotimes (i len)
+          (dotimes (j len)
+            (when (/= i j)
+              (let ((combo (concat (string (aref str i)) (string (aref str j)))))
+                (unless (member combo used)
+                  (setq key combo)
+                  (throw 'found nil))))))))
+    (or key (string (aref str 0)))))
+
 ;;;###autoload
 (defmacro vtermux-define (name &rest args)
   "Define a vtermux application NAME.
@@ -234,11 +259,12 @@ Keyword arguments:
   :directory SYMBOL    - directory resolution method: `:project',
                          `:buffer', or `:prompt'
                          (default: `vtermux-command-directory')
-  :key CHAR            - single-character shortcut for `vtermux-run'
-                         (default: nil, not shown in dispatch menu)
+  :key CHAR-OR-STRING  - dispatch shortcut for `vtermux-run'
+                         (default: first unused letter or letter pair
+                         from NAME)
 
-`vtermux-run' uses the `:key' shortcuts to present a
-single-character dispatch menu for launching apps.
+`vtermux-run' dispatches to apps by prefix-matching their `:key'.
+Type characters to narrow; `?' shows help, `DEL' backs up.
 
 Directory resolution:
   With \\[universal-argument], always prompted for a directory.
@@ -248,7 +274,10 @@ Directory resolution:
   (let* ((prog (or (plist-get args :program) (symbol-name name)))
          (bufname (or (plist-get args :buffer-name) (symbol-name name)))
          (cmd-args (plist-get args :args))
-         (key-val (plist-get args :key))
+         (key-val (let ((v (plist-get args :key)))
+                    (cond ((characterp v) (string v))
+                          ((stringp v) v)
+                          (t nil))))
          (prog-var (intern (format "%s-program" name)))
          (bufname-var (intern (format "%s-buffer-name" name)))
          (args-var (intern (format "%s-args" name)))
@@ -323,65 +352,85 @@ Directory resolution:
                          (vtermux--command-directory ,directory-var)
                          'prev (or offset 1)))
 
-       (let ((cell (assq ',name vtermux--registry)))
+       (let* ((cell (assq ',name vtermux--registry))
+               (key ,(if (plist-member args :key)
+                         key-val
+                       `(vtermux--next-key ',name))))
           (if cell
-              (setcdr cell (list ',prog-var ',fn ,key-val))
-            (push (cons ',name (list ',prog-var ',fn ,key-val)) vtermux--registry)))
+              (setcdr cell (list ',prog-var ',fn key))
+            (push (cons ',name (list ',prog-var ',fn key)) vtermux--registry)))
         ',name)))
 
 (defvar vtermux--registry nil
   "Alist of (NAME . (PROGRAM-VAR FN KEY)) for all defined vtermux applications.
 PROGRAM-VAR is the symbol holding the program name.  FN is the
-generated interactive command symbol.  KEY is the single-character
-shortcut for `vtermux-run', or nil.")
+generated interactive command symbol.  KEY is the dispatch prefix
+string for `vtermux-run', or nil.")
 
 ;;;###autoload
 (defun vtermux-run (&optional arg)
-  "Launch a vtermux application via single-character dispatch.
+  "Launch a vtermux application by prefix-matching its `:key'.
 
-Apps registered with a `:key' in `vtermux-define' appear in the
-prompt.  Press `?' to see the full list of available apps.
+Type characters to narrow the dispatch prefix.  `?' shows help,
+`DEL' backs up one character.  Dispatches when exactly one app
+matches.
 
 With \\[universal-argument], prompt for a directory.
 Otherwise uses the configured directory method."
   (interactive "P")
-  (let* ((app-keys
-          (delq nil
-                (mapcar
-                 (lambda (entry)
-                   (when-let* ((key (nth 2 (cdr entry))))
-                     (cons key (car entry))))
-                 vtermux--registry)))
-         (sort-keys (lambda (a b) (< (car a) (car b))))
-         (keys (sort (mapcar #'car app-keys) #'<))
-         (help-buf (get-buffer-create "*vtermux-run help*")))
-    (if (null keys)
+  (let ((prefix "")
+        (keys-alist (delq nil
+                          (mapcar (lambda (e)
+                                    (when-let* ((k (nth 2 (cdr e))))
+                                      (cons k (car e))))
+                                  vtermux--registry))))
+    (if (null keys-alist)
         (user-error "No vtermux apps have a :key set")
-      (let ((ch (read-char-choice
-                 (format "vtermux [%s] (? for help): "
-                         (apply #'string keys))
-                 (append keys '(??)))))
-        (when (eq ch ??)
-          (with-help-window help-buf
-            (princ "vtermux-run:\n\n")
-            (dolist (ak (sort app-keys sort-keys))
-              (princ (format "%c:\t%s\n" (car ak) (cdr ak))))
-            (dolist (entry vtermux--registry)
-              (unless (nth 2 (cdr entry))
-                (princ (format "   \t%s (no key)\n" (car entry))))))
-          (setq ch (read-char-choice
-                    (format "vtermux [%s] (? for help): "
-                            (apply #'string keys))
-                    (append keys '(??))))
-          (when (eq ch ??) (keyboard-quit)))
-        (let* ((app (cdr (assq ch app-keys)))
-               (entry (assq app vtermux--registry))
-               (directory (vtermux--command-directory nil arg)))
-          (vtermux--launch (symbol-value (cadr entry))
-                           (symbol-value (intern (format "%s-buffer-name" app)))
-                           (symbol-value (intern (format "%s-args" app)))
-                           (intern (format "%s-buffer-list" app))
-                           directory))))))
+      (while t
+        (let* ((filtered
+                (cl-remove-if-not
+                 (lambda (e) (string-prefix-p prefix (car e)))
+                 keys-alist))
+               (exact
+                (cl-remove-if-not
+                 (lambda (e) (equal prefix (car e)))
+                 filtered)))
+          (cond
+           ((= (length exact) 1)
+            (let* ((entry (assq (cdar exact) vtermux--registry))
+                   (app (car entry))
+                   (directory (vtermux--command-directory nil arg)))
+              (vtermux--launch (symbol-value (cadr entry))
+                               (symbol-value (intern (format "%s-buffer-name" app)))
+                               (symbol-value (intern (format "%s-args" app)))
+                               (intern (format "%s-buffer-list" app))
+                               directory))
+            (cl-return))
+           ((null filtered)
+            (user-error "No vtermux app matching key %S" prefix))
+           (t
+            (let ((ch (read-char (format
+                                  (if (zerop (length prefix))
+                                      "vtermux: "
+                                    "vtermux [%s]: ")
+                                  prefix))))
+              (cond
+               ((eq ch ??)
+                (with-help-window (get-buffer-create "*vtermux-run help*")
+                  (princ "vtermux-run keys:\n\n")
+                  (dolist (e (sort (copy-sequence keys-alist)
+                                   (lambda (a b)
+                                     (if (string= (car a) "?")
+                                         nil
+                                       (string< (car a) (car b))))))
+                    (princ (format "%s:\t%s\n" (car e) (cdr e))))
+                  (with-current-standard-display 4)))
+               ((= ch ?\d)
+                (when (> (length prefix) 0)
+                  (setq prefix (substring prefix 0 (1- (length prefix))))))
+               ((characterp ch)
+                (setq prefix (concat prefix (string ch))))
+               (t nil))))))))))
 
 (provide 'vtermux)
 ;;; vtermux.el ends here
