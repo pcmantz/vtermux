@@ -28,6 +28,8 @@
   "Args passed to `message' during a test.")
 (defvar vtermux-test--read-directory-name-result nil
   "Value returned by mocked `read-directory-name'.")
+(defvar vtermux-test--read-char-choice-result nil
+  "Value returned by mocked `read-char-choice'.")
 
 ;; ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -44,7 +46,8 @@
         (vtermux-test--read-string-result "test-label")
         (vtermux-test--completing-read-result "buf-1")
         (vtermux-test--message-args nil)
-        (vtermux-test--read-directory-name-result "/tmp/mocked-dir"))
+        (vtermux-test--read-directory-name-result "/tmp/mocked-dir")
+        (vtermux-test--read-char-choice-result ?b))
     (cl-letf (((symbol-function 'switch-to-buffer)
                (lambda (buf-or-name &rest _)
                  (setq vtermux-test--switched-buffer buf-or-name)
@@ -58,8 +61,11 @@
               ((symbol-function 'message)
                (lambda (fmt &rest args)
                  (setq vtermux-test--message-args (cons fmt args))))
-              ((symbol-function 'read-directory-name)
-               (lambda (&rest _) vtermux-test--read-directory-name-result)))
+               ((symbol-function 'read-directory-name)
+                (lambda (&rest _) vtermux-test--read-directory-name-result))
+               ((symbol-function 'read-char-choice)
+                (lambda (_prompt _chars)
+                  vtermux-test--read-char-choice-result)))
       (funcall fn))))
 
 (defun vtermux-test--capture-vterm-shell (&rest _)
@@ -529,7 +535,7 @@
             (vtermux-command-directory :buffer)
             (vtermux-kill-buffer-on-exit nil))
        (eval (macroexpand '(vtermux-define btop :key ?b)))
-       (setq vtermux-test--completing-read-result "b  btop")
+       (setq vtermux-test--read-char-choice-result ?b)
        (cl-letf (((symbol-function 'vterm-mode) #'vtermux-test--capture-vterm-shell))
          (vtermux-run))
        (unwind-protect

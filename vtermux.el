@@ -371,31 +371,42 @@ string for `vtermux-run', or nil.")
 
 ;;;###autoload
 (defun vtermux-run (&optional arg)
-  "Launch a vtermux application, selected via `completing-read'.
+  "Launch a vtermux application by single-character dispatch.
 
-Apps with a `:key' show it as a prefix, so typing the key narrows
-the selection.  Integrates with ivy, helm, vertico, etc.
+Press a single key matching an app's `:key' to launch it immediately.
+Press `?' to show all available apps in a help buffer.
 
 With \\[universal-argument], prompt for a directory.
 Otherwise uses the configured directory method."
   (interactive "P")
-  (let* ((candidates
-          (mapcar (lambda (entry)
-                    (let* ((app (car entry))
-                           (key (nth 2 (cdr entry)))
-                           (name (symbol-name app))
-                           (display (if key (format "%s  %s" key name) name)))
-                      (cons display app)))
-                  vtermux--registry))
-         (display (completing-read "vtermux: " candidates nil t))
-         (app (cdr (assoc display candidates)))
-         (entry (assq app vtermux--registry))
-         (directory (vtermux--command-directory nil arg)))
-    (vtermux--launch (symbol-value (cadr entry))
-                     (symbol-value (intern (format "%s-buffer-name" app)))
-                     (symbol-value (intern (format "%s-args" app)))
-                     (intern (format "%s-buffer-list" app))
-                     directory)))
+  (let* ((app-keys
+          (delq nil
+                (mapcar (lambda (e)
+                          (when-let* ((k (nth 2 (cdr e))))
+                            (cons (aref k 0) (car e))))
+                        vtermux--registry)))
+         (keys (sort (mapcar #'car app-keys) #'<))
+         (prompt (format "vtermux [%s] (? for help): "
+                         (apply #'string keys))))
+    (if (null keys)
+        (user-error "No vtermux apps have a :key set")
+      (let ((ch (read-char-choice prompt (append keys '(??)))))
+        (when (eq ch ??)
+          (with-help-window (get-buffer-create "*vtermux-run help*")
+            (princ "vtermux-run keys:\n\n")
+            (dolist (ak (sort (copy-sequence app-keys)
+                              (lambda (a b) (< (car a) (car b)))))
+              (princ (format "%c  %s\n" (car ak) (cdr ak)))))
+          (setq ch (read-char-choice prompt (append keys '(??))))
+          (when (eq ch ??) (keyboard-quit)))
+        (let* ((app (cdr (assq ch app-keys)))
+               (entry (assq app vtermux--registry))
+               (directory (vtermux--command-directory nil arg)))
+          (vtermux--launch (symbol-value (cadr entry))
+                           (symbol-value (intern (format "%s-buffer-name" app)))
+                           (symbol-value (intern (format "%s-args" app)))
+                           (intern (format "%s-buffer-list" app))
+                            directory))))))
 
 (provide 'vtermux)
 ;;; vtermux.el ends here
