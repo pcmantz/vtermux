@@ -112,7 +112,7 @@ Extracts numeric labels from buffer names matching the vtermux
        (let ((i 1))
          (dolist (n nums)
            (when (/= n i) (throw 'next i))
-           (setq i (1+ n)))
+            (setq i (1+ i)))
          i)))))
 
 ;;; Shared implementation functions
@@ -202,7 +202,7 @@ If instances exist, prompts for a label and creates a new one."
         (switch-to-buffer
          (completing-read (format "%s instance: " prog)
                           (mapcar #'buffer-name buffers) nil t))
-      (message (format "No %s instances running." prog)))))
+      (message "No %s instances running." prog))))
 
 (defun vtermux--cycle (prog bufname args buf-list-sym directory direction offset)
   "Switch DIRECTION by OFFSET in the PROG buffer list scoped to DIRECTORY.
@@ -368,8 +368,7 @@ Directory resolution:
               (setcdr cell (list ',prog-var ',fn key))
             (push (cons ',name (list ',prog-var ',fn key)) vtermux--registry)))
         ,@(when bind-key
-            `((when (boundp 'global-map)
-                (define-key global-map (kbd ,bind-key) #',fn))))
+            `((define-key global-map (kbd ,bind-key) #',fn)))
         ',name)))
 
 ;;;###autoload
@@ -397,7 +396,7 @@ Otherwise uses the configured directory method."
                              keys " ")
                   ": ")))
     (if (null keys)
-        (user-error "No vtermux apps have a :key set")
+        (user-error "No vtermux apps have a :dispatch set")
       (let ((ch (read-char-choice prompt (append keys '(??)))))
         (while (eq ch ??)
           (with-temp-message

@@ -376,7 +376,7 @@
        (set buf-list-sym nil)
        (vtermux--select "btop" buf-list-sym)
        (should (equal vtermux-test--message-args
-                      '("No btop instances running.")))))))
+                      '("No %s instances running." "btop")))))))
 
 ;; ─── vtermux--cycle ─────────────────────────────────────────────────
 
