@@ -202,6 +202,18 @@
         (should (equal (buffer-name buf) "*btop - /tmp (1)*"))
       (kill-buffer buf))))
 
+(ert-deftest vtermux-test--create-buffer-label-collision ()
+  (let* ((buf-list-sym (make-symbol "vtermux-test-bufs"))
+         (vtermux-kill-buffer-on-exit nil)
+         first)
+    (set buf-list-sym nil)
+    (cl-letf (((symbol-function 'vterm-mode) (lambda () nil)))
+      (setq first (vtermux--create-buffer "btop" "btop" nil buf-list-sym "/tmp" "1"))
+      (unwind-protect
+          (should-error (vtermux--create-buffer "btop" "btop" nil buf-list-sym "/tmp" "1")
+                        :type 'user-error)
+        (kill-buffer first)))))
+
 (ert-deftest vtermux-test--create-buffer-appends-to-list ()
   (let* ((buf-list-sym (make-symbol "vtermux-test-bufs"))
          (vtermux-kill-buffer-on-exit nil)
