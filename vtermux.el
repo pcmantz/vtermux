@@ -145,7 +145,10 @@ value holds the buffer list for this application.
 LABEL is an optional disambiguating string."
   (let* ((name (vtermux--format-buffer-name bufname directory label))
          (default-directory directory)
-         (vterm-shell (if args (format "%s %s" prog args) prog))
+         (vterm-shell (cond
+                        ((null args) prog)
+                        ((stringp args) (format "%s %s" prog args))
+                        ((listp args) (combine-and-quote-strings (cons prog args)))))
          (buffer (generate-new-buffer name)))
     (with-current-buffer buffer
       (vterm-mode)
@@ -263,9 +266,9 @@ Directory resolution:
          :type 'string
          :group 'vtermux)
        (defcustom ,args-var ,cmd-args
-         ,(format "Command line arguments for `%s'." name)
-         :type '(choice (const :tag "None" nil) string)
-         :group 'vtermux)
+          ,(format "Command line arguments for `%s'." name)
+          :type '(choice (const :tag "None" nil) string (repeat :tag "List of arguments" string))
+          :group 'vtermux)
        (defvar ,buf-list-var nil
          ,(format "List of `%s' vterm buffers." name))
        (defvar ,directory-var ',directory-val

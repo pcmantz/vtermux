@@ -124,7 +124,7 @@ On error (e.g., no project found), falls back to `read-directory-name`.
 
 - **No test framework yet** — no tests exist. Testing would require mocking `vterm-mode` and process sentinels.
 - **No keybinding generation** — the macro only creates commands; bindings are left to the user.
-- **`:args` is a single string** — not a list. Gets concatenated with `program` via `(format "%s %s" prog args)` for `vterm-shell`.
+- **`:args` can be a string or a list of strings**. Strings are concatenated with program via `(format "%s %s" prog args)`. Lists are joined via `combine-and-quote-strings` for proper shell quoting.
 - **Buffer list is a plain defvar** — not a `defcustom`. Resets to nil on package reload.
 - **Registry (`vtermux--registry`)** is maintained but currently unused by any command — it's populated but not consulted. It stores `(NAME . PROGRAM)` pairs and may be intended for future use (e.g., a dispatcher or overview command).
 - vtermux-command-directory `defcustom` defaults to `:project` but the `vtermux--command-directory` function also handles the symbol `'default` (from per-definition `:directory` not being set) via a pcase that falls through to the global default.

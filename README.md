@@ -61,7 +61,7 @@ Pass keyword arguments to `vtermux-define`:
 |---|---|---|
 | `:program` | `symbol-name` of NAME | Executable to run. |
 | `:buffer-name` | `symbol-name` of NAME | Base name for generated buffers. |
-| `:args` | `nil` | Command-line arguments passed to the program. |
+| `:args` | `nil` | Command-line arguments passed to the program. Can be a string or a list of strings. |
 | `:directory` | `vtermux-command-directory` | Directory resolution override for this definition only — see [Directory resolution](#directory-resolution). |
 
 ### Generated customization variables
