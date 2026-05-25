@@ -43,8 +43,8 @@ generates named vterm-based terminal commands.
 
 ### File Architecture
 
-- `vtermux.el` (330 lines) — the entire package
-- `vtermux-test.el` (480 lines) — ERT test suite (37 tests)
+- `vtermux.el` (415 lines) — the entire package
+- `vtermux-test.el` (558 lines) — ERT test suite (44 tests)
 
 ### Core Macro: `vtermux-define`
 
@@ -123,10 +123,8 @@ On error (e.g., no project found), falls back to `read-directory-name`.
 
 ### Limitations / Known Design Decisions
 
-- **ERT test suite** in `vtermux-test.el` (37 tests). Tests mock `vterm-mode` with a `define-derived-mode` stub so they don't need the native `vterm-module`. Run with: `emacs -batch -L . -l vtermux-test.el -f ert-run-tests-batch-and-exit`
+- **ERT test suite** in `vtermux-test.el` (44 tests). Tests mock `vterm-mode` with a `define-derived-mode` stub so they don't need the native `vterm-module`. Run with: `emacs -batch -L . -l vtermux-test.el -f ert-run-tests-batch-and-exit`
 
-- **No test framework yet** — no tests exist. Testing would require mocking `vterm-mode` and process sentinels.
-- **No keybinding generation** — the macro only creates commands; bindings are left to the user.
 - **`:args` can be a string or a list of strings**. Strings are concatenated with program via `(format "%s %s" prog args)`. Lists are joined via `combine-and-quote-strings` for proper shell quoting.
 - **Buffer list is a plain defvar** — not a `defcustom`. Resets to nil on package reload.
 - **Registry (`vtermux--registry`)** stores `(NAME . (PROGRAM-VAR FN KEY))` for all defined vtermux applications. Used by `vtermux-run` for single-character dispatch.
