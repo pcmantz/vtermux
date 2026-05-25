@@ -418,15 +418,14 @@ Otherwise uses the configured directory method."
                                   prefix))))
               (cond
                ((eq ch ??)
-                (with-help-window (get-buffer-create "*vtermux-run help*")
-                  (princ "vtermux-run keys:\n\n")
-                  (dolist (e (sort (copy-sequence keys-alist)
-                                   (lambda (a b)
-                                     (if (string= (car a) "?")
-                                         nil
-                                       (string< (car a) (car b))))))
-                    (princ (format "%s:\t%s\n" (car e) (cdr e))))
-                  (with-current-standard-display 4)))
+                 (with-help-window (get-buffer-create "*vtermux-run help*")
+                   (princ "vtermux-run keys:\n\n")
+                   (dolist (e (sort (copy-sequence keys-alist)
+                                    (lambda (a b)
+                                      (if (string= (car a) "?")
+                                          nil
+                                        (string< (car a) (car b))))))
+                     (princ (format "%s:\t%s\n" (car e) (cdr e))))))
                ((= ch ?\d)
                 (when (> (length prefix) 0)
                   (setq prefix (substring prefix 0 (1- (length prefix))))))
