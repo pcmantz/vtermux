@@ -391,12 +391,12 @@ Otherwise uses the configured directory method."
         (user-error "No vtermux apps have a :key set")
       (let ((ch (read-char-choice prompt (append keys '(??)))))
         (while (eq ch ??)
-          (minibuffer-message
+          (with-temp-message
            (mapconcat (lambda (ak) (format "%c: %s" (car ak) (cdr ak)))
                       (sort (copy-sequence app-keys)
                             (lambda (a b) (< (car a) (car b))))
                       "  "))
-          (setq ch (read-char-choice prompt (append keys '(??)))))
+          (setq ch (read-char-choice prompt (append keys '(??))))))
         (let* ((app (cdr (assq ch app-keys)))
                (entry (assq app vtermux--registry))
                (directory (vtermux--command-directory nil arg)))
