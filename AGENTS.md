@@ -36,6 +36,105 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Project: vtermux.el
+
+Single-file Emacs package providing `vtermux-define`, a macro that
+generates named vterm-based terminal commands.
+
+### File Architecture
+
+- `vtermux.el` (327 lines) — the entire package
+
+### Core Macro: `vtermux-define`
+
+**(vtermux-define NAME &key :program :buffer-name :args :directory)**
+
+Generates five interactive commands per definition:
+
+| Generated command | Behavior |
+|---|---|
+| `NAME` | Launch instance. If none exist, creates one. If any exist, prompts for label. |
+| `NAME-new` | Always create new instance, always prompts for label. |
+| `NAME-select` | Pick live instance via `completing-read`. |
+| `NAME-next` | Cycle forward through instances in current scope. |
+| `NAME-prev` | Cycle backward through instances in current scope. |
+
+Also creates per-definition customization vars:
+- `NAME-program`, `NAME-buffer-name`, `NAME-args`, `NAME-command-directory`
+- `NAME-buffer-list` (defvar, holds live buffer objects)
+
+### Private Helper Functions
+
+| Function | Key signature | Purpose |
+|---|---|---|
+| `vtermux--command-directory` | (&optional method prompt) | Resolves working dir via `:project`/`:buffer`/`:prompt`. Falls back to prompt on error. |
+| `vtermux--next-label` | (buffers) | Auto-numbers labels: finds smallest missing positive integer from existing buffer names matching ` (N)*` suffix. |
+| `vtermux--format-buffer-name` | (bufname directory &optional label) | Formats `*<base> - <dir>*` or `*<base> - <dir> (<label>)*`. |
+| `vtermux--buffers` | (bufname buf-list &optional directory) | Filters live buffers matching prefix. When directory is nil, returns all live. |
+| `vtermux--create-buffer` | (prog bufname args buf-list-sym directory &optional label) | Creates vterm buffer in directory. Sets sentinel to kill on process exit. Adds kill-buffer-hook to clean buffer-list. |
+| `vtermux--launch` | (prog bufname args buf-list-sym directory) | If buffers exist in scope, prompts for label and creates new. Otherwise creates first instance. |
+| `vtermux--launch-new` | (prog bufname args buf-list-sym directory) | Always creates new, always prompts for label. |
+| `vtermux--select` | (prog buf-list-sym) | `completing-read` from live buffers. |
+| `vtermux--cycle` | (prog bufname args buf-list-sym directory direction offset) | Scoped cycling. If no buffers in scope, delegates to `vtermux--launch`. |
+
+### Buffer Naming Convention
+
+```
+*<base> - <dir>*                   — unnamed (first instance)
+*<base> - <dir> (<label>)*         — labeled (second+ instance)
+```
+
+Example: `*btop - ~/projects/myapp*`, `*btop - ~/projects/myapp (1)*`
+
+### Directory Resolution
+
+Three methods, resolved in `vtermux--command-directory`:
+
+| Method | What it resolves to |
+|---|---|
+| `:project` | `(project-root (project-current))` |
+| `:buffer` | `default-directory` |
+| `:prompt` | `read-directory-name` |
+
+Resolution order: `C-u` prefix → per-def `:directory` → global `vtermux-command-directory`.
+
+On error (e.g., no project found), falls back to `read-directory-name`.
+
+### Label Auto-Numbering (`vtermux--next-label`)
+
+- Parses ` (N)*` suffix from existing buffer names in scope.
+- Returns smallest missing positive integer as string.
+- Example: given labels 1, 2, 4 → returns "3".
+- If no labels exist, returns "1".
+
+### Buffer Lifecycle
+
+1. **Creation**: `vtermux--create-buffer` calls `generate-new-buffer`, enters `vterm-mode`, sets `vterm-shell` to program+args.
+2. **Exit**: Process sentinel kills buffer when process finishes/exits (if `vtermux-kill-buffer-on-exit` is non-nil).
+3. **Cleanup**: `kill-buffer-hook` (buffer-local) removes the buffer from `NAME-buffer-list`.
+4. All interactions with the buffer list use `cl-remove-if-not` with `buffer-live-p`, so stale entries are harmless but still cleaned by the hook.
+
+### Edge Cases in Cycling (`vtermux--cycle`)
+
+- If `(current-buffer)` is not in the scoped buffer list (e.g., user switched to a non-vtermux buffer), `cl-position` returns nil and cycling starts from index 0 (for `:next`) or from last (for `:prev`).
+- Handles offset wrap-around via `mod`.
+- If no buffers exist in scope, delegates to `vtermux--launch` (creates one).
+
+### Limitations / Known Design Decisions
+
+- **No test framework yet** — no tests exist. Testing would require mocking `vterm-mode` and process sentinels.
+- **No keybinding generation** — the macro only creates commands; bindings are left to the user.
+- **`:args` is a single string** — not a list. Gets concatenated with `program` via `(format "%s %s" prog args)` for `vterm-shell`.
+- **Buffer list is a plain defvar** — not a `defcustom`. Resets to nil on package reload.
+- **Registry (`vtermux--registry`)** is maintained but currently unused by any command — it's populated but not consulted. It stores `(NAME . PROGRAM)` pairs and may be intended for future use (e.g., a dispatcher or overview command).
+- vtermux-command-directory `defcustom` defaults to `:project` but the `vtermux--command-directory` function also handles the symbol `'default` (from per-definition `:directory` not being set) via a pcase that falls through to the global default.
+
+### Emacs & Package Baseline
+
+- Emacs 29.1 minimum (lexical-binding: t)
+- External dependency: `vterm` (any version)
+- Standard library: `cl-lib`
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 
@@ -66,12 +165,12 @@ bd close <id>         # Complete work
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
 4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd dolt push
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
+    ```bash
+    git pull --rebase
+    bd dolt push
+    git push
+    git status  # MUST show "up to date with origin"
+    ```
 5. **Clean up** - Clear stashes, prune remote branches
 6. **Verify** - All changes committed AND pushed
 7. **Hand off** - Provide context for next session
