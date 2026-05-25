@@ -373,8 +373,8 @@ string for `vtermux-run', or nil.")
 (defun vtermux-run (&optional arg)
   "Launch a vtermux application by single-character dispatch.
 
-Press a single key matching an app's `:key' to launch it immediately.
-Press `?' to show all available apps in a help buffer.
+Press a key matching an app's `:key' to launch it immediately.
+Press `?' to show available apps.
 
 With \\[universal-argument], prompt for a directory.
 Otherwise uses the configured directory method."
@@ -386,14 +386,17 @@ Otherwise uses the configured directory method."
                             (cons (aref k 0) (car e))))
                         vtermux--registry)))
          (keys (sort (mapcar #'car app-keys) #'<))
-         (prompt (format "vtermux [%s]: "
-                         (mapconcat (lambda (ak) (format "%c:%s" (car ak) (cdr ak)))
-                                    (sort (copy-sequence app-keys)
-                                          (lambda (a b) (< (car a) (car b))))
-                                    " "))))
+         (prompt "vtermux: "))
     (if (null keys)
         (user-error "No vtermux apps have a :key set")
-      (let ((ch (read-char-choice prompt keys)))
+      (let ((ch (read-char-choice prompt (append keys '(??)))))
+        (while (eq ch ??)
+          (minibuffer-message
+           (mapconcat (lambda (ak) (format "%c: %s" (car ak) (cdr ak)))
+                      (sort (copy-sequence app-keys)
+                            (lambda (a b) (< (car a) (car b))))
+                      "  "))
+          (setq ch (read-char-choice prompt (append keys '(??)))))
         (let* ((app (cdr (assq ch app-keys)))
                (entry (assq app vtermux--registry))
                (directory (vtermux--command-directory nil arg)))
