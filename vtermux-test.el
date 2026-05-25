@@ -459,7 +459,10 @@
     (should (fboundp 'testapp-select))
     (should (fboundp 'testapp-next))
     (should (fboundp 'testapp-prev))
-    (should (equal (cdr (assq 'testapp vtermux--registry)) "testapp"))))
+    (let ((entry (cdr (assq 'testapp vtermux--registry))))
+      (should (equal (car entry) 'testapp-program))
+      (should (eq (nth 1 entry) 'testapp))
+      (should (null (nth 2 entry))))))
 
 (ert-deftest vtermux-test--define-all-keywords ()
   (let ((vtermux--registry nil))
@@ -467,14 +470,25 @@
                           :program "/usr/bin/myapp"
                           :buffer-name "MyApp"
                           :args "--verbose"
-                          :directory :buffer)))
+                          :directory :buffer
+                          :key ?m)))
     (should (equal myapp-program "/usr/bin/myapp"))
     (should (equal myapp-buffer-name "MyApp"))
     (should (equal myapp-args "--verbose"))
-    (should (eq myapp-command-directory :buffer))))
+    (should (eq myapp-command-directory :buffer))
+    (let ((entry (cdr (assq 'myapp vtermux--registry))))
+      (should (equal (car entry) 'myapp-program))
+      (should (eq (nth 1 entry) 'myapp))
+      (should (eq (nth 2 entry) ?m)))))
 
 (ert-deftest vtermux-test--define-registry-existing ()
-  (let ((vtermux--registry '((oldapp . oldapp-program))))
+  (let ((vtermux--registry '((oldapp . (oldapp-program oldapp nil)))))
     (eval (macroexpand '(vtermux-define newapp)))
-    (should (equal (cdr (assq 'newapp vtermux--registry)) "newapp"))
-    (should (eq (cdr (assq 'oldapp vtermux--registry)) 'oldapp-program))))
+    (let ((new-entry (cdr (assq 'newapp vtermux--registry)))
+          (old-entry (cdr (assq 'oldapp vtermux--registry))))
+      (should (equal (car new-entry) 'newapp-program))
+      (should (eq (nth 1 new-entry) 'newapp))
+      (should (null (nth 2 new-entry)))
+      (should (eq (car old-entry) 'oldapp-program))
+      (should (eq (nth 1 old-entry) 'oldapp))
+      (should (null (nth 2 old-entry))))))

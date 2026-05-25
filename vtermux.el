@@ -234,6 +234,11 @@ Keyword arguments:
   :directory SYMBOL    - directory resolution method: `:project',
                          `:buffer', or `:prompt'
                          (default: `vtermux-command-directory')
+  :key CHAR            - single-character shortcut for `vtermux-run'
+                         (default: nil, not shown in dispatch menu)
+
+`vtermux-run' uses the `:key' shortcuts to present a
+single-character dispatch menu for launching apps.
 
 Directory resolution:
   With \\[universal-argument], always prompted for a directory.
@@ -243,6 +248,7 @@ Directory resolution:
   (let* ((prog (or (plist-get args :program) (symbol-name name)))
          (bufname (or (plist-get args :buffer-name) (symbol-name name)))
          (cmd-args (plist-get args :args))
+         (key-val (plist-get args :key))
          (prog-var (intern (format "%s-program" name)))
          (bufname-var (intern (format "%s-buffer-name" name)))
          (args-var (intern (format "%s-args" name)))
@@ -318,13 +324,64 @@ Directory resolution:
                          'prev (or offset 1)))
 
        (let ((cell (assq ',name vtermux--registry)))
-         (if cell
-             (setcdr cell ,prog-var)
-           (push (cons ',name ,prog-var) vtermux--registry)))
-       ',name)))
+          (if cell
+              (setcdr cell (list ',prog-var ',fn ,key-val))
+            (push (cons ',name (list ',prog-var ',fn ,key-val)) vtermux--registry)))
+        ',name)))
 
 (defvar vtermux--registry nil
-  "Alist of (NAME . PROGRAM) for all defined vtermux applications.")
+  "Alist of (NAME . (PROGRAM-VAR FN KEY)) for all defined vtermux applications.
+PROGRAM-VAR is the symbol holding the program name.  FN is the
+generated interactive command symbol.  KEY is the single-character
+shortcut for `vtermux-run', or nil.")
+
+;;;###autoload
+(defun vtermux-run (&optional arg)
+  "Launch a vtermux application via single-character dispatch.
+
+Apps registered with a `:key' in `vtermux-define' appear in the
+prompt.  Press `?' to see the full list of available apps.
+
+With \\[universal-argument], prompt for a directory.
+Otherwise uses the configured directory method."
+  (interactive "P")
+  (let* ((app-keys
+          (delq nil
+                (mapcar
+                 (lambda (entry)
+                   (when-let* ((key (nth 2 (cdr entry))))
+                     (cons key (car entry))))
+                 vtermux--registry)))
+         (sort-keys (lambda (a b) (< (car a) (car b))))
+         (keys (sort (mapcar #'car app-keys) #'<))
+         (help-buf (get-buffer-create "*vtermux-run help*")))
+    (if (null keys)
+        (user-error "No vtermux apps have a :key set")
+      (let ((ch (read-char-choice
+                 (format "vtermux [%s] (? for help): "
+                         (apply #'string keys))
+                 (append keys '(??)))))
+        (when (eq ch ??)
+          (with-help-window help-buf
+            (princ "vtermux-run:\n\n")
+            (dolist (ak (sort app-keys sort-keys))
+              (princ (format "%c:\t%s\n" (car ak) (cdr ak))))
+            (dolist (entry vtermux--registry)
+              (unless (nth 2 (cdr entry))
+                (princ (format "   \t%s (no key)\n" (car entry))))))
+          (setq ch (read-char-choice
+                    (format "vtermux [%s] (? for help): "
+                            (apply #'string keys))
+                    (append keys '(??))))
+          (when (eq ch ??) (keyboard-quit)))
+        (let* ((app (cdr (assq ch app-keys)))
+               (entry (assq app vtermux--registry))
+               (directory (vtermux--command-directory nil arg)))
+          (vtermux--launch (symbol-value (cadr entry))
+                           (symbol-value (intern (format "%s-buffer-name" app)))
+                           (symbol-value (intern (format "%s-args" app)))
+                           (intern (format "%s-buffer-list" app))
+                           directory))))))
 
 (provide 'vtermux)
 ;;; vtermux.el ends here

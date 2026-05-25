@@ -48,7 +48,7 @@ generates named vterm-based terminal commands.
 
 ### Core Macro: `vtermux-define`
 
-**(vtermux-define NAME &key :program :buffer-name :args :directory)**
+**(vtermux-define NAME &key :program :buffer-name :args :directory :key)**
 
 Generates five interactive commands per definition:
 
@@ -129,8 +129,9 @@ On error (e.g., no project found), falls back to `read-directory-name`.
 - **No keybinding generation** — the macro only creates commands; bindings are left to the user.
 - **`:args` can be a string or a list of strings**. Strings are concatenated with program via `(format "%s %s" prog args)`. Lists are joined via `combine-and-quote-strings` for proper shell quoting.
 - **Buffer list is a plain defvar** — not a `defcustom`. Resets to nil on package reload.
-- **Registry (`vtermux--registry`)** is maintained but currently unused by any command — it's populated but not consulted. It stores `(NAME . PROGRAM)` pairs and may be intended for future use (e.g., a dispatcher or overview command).
-- vtermux-command-directory `defcustom` defaults to `:project` but the `vtermux--command-directory` function also handles the symbol `'default` (from per-definition `:directory` not being set) via a pcase that falls through to the global default.
+- **Registry (`vtermux--registry`)** stores `(NAME . (PROGRAM-VAR FN KEY))` for all defined vtermux applications. Used by `vtermux-run` for single-character dispatch.
+- **`:key` keyword on `vtermux-define`** registers a single-character shortcut for `vtermux-run`. Example: `(vtermux-define btop :key ?b)`.
+- `vtermux-command-directory` `defcustom` defaults to `:project` but the `vtermux--command-directory` function also handles the symbol `'default` (from per-definition `:directory` not being set) via a pcase that falls through to the global default.
 
 ### Emacs & Package Baseline
 

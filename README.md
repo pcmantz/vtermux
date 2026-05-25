@@ -62,6 +62,7 @@ Pass keyword arguments to `vtermux-define`:
 | `:program` | `symbol-name` of NAME | Executable to run. |
 | `:buffer-name` | `symbol-name` of NAME | Base name for generated buffers. |
 | `:args` | `nil` | Command-line arguments passed to the program. Can be a string or a list of strings. |
+| `:key` | `nil` | Single-character shortcut for `vtermux-run`. |
 | `:directory` | `vtermux-command-directory` | Directory resolution override for this definition only — see [Directory resolution](#directory-resolution). |
 
 ### Generated customization variables
@@ -78,7 +79,11 @@ settings after definition or via `customize`:
 
 ### Commands
 
-Each `vtermux-define` call generates five interactive commands:
+Each `vtermux-define` call generates five interactive commands.
+Additionally, `vtermux-run` provides a global single-character launcher
+for apps registered with a `:key`.
+
+#### Per-app Commands
 
 | Command | Description |
 |---|---|
@@ -88,8 +93,13 @@ Each `vtermux-define` call generates five interactive commands:
 | `NAME-next` | Cycle forward through instances in the current scope. |
 | `NAME-prev` | Cycle backward through instances in the current scope. |
 
-`NAME-next` and `NAME-prev` accept a numeric prefix argument to skip that
-many buffers.
+`NAME-next` and `NAME-prev` accept a numeric prefix argument to skip that many buffers.
+
+#### Global Launcher
+
+| Command | Description |
+|---|---|
+| `vtermux-run` | Single-character dispatch. Apps with a `:key` appear in the prompt. Press `?` for help. |
 
 ### Directory resolution
 
