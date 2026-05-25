@@ -62,7 +62,8 @@ Pass keyword arguments to `vtermux-define`:
 | `:program` | `symbol-name` of NAME | Executable to run. |
 | `:buffer-name` | `symbol-name` of NAME | Base name for generated buffers. |
 | `:args` | `nil` | Command-line arguments passed to the program. Can be a string or a list of strings. |
-| `:key` | auto (first unused letter from NAME) | Dispatch shortcut or keybinding. A character (e.g., `?b`) sets the dispatch key for `vtermux-run`. A key sequence string (e.g., `"C-c b"`) defines a global keybinding. |
+| `:bind` | `nil` | Key sequence string (e.g., `"C-c b"`) defining a global keybinding for this app. |
+| `:dispatch` | auto (first unused letter from NAME) | Override the auto-detected dispatch key for `vtermux-run`. A character (e.g., `?b`). |
 | `:directory` | `vtermux-command-directory` | Directory resolution override for this definition only — see [Directory resolution](#directory-resolution). |
 
 ### Generated customization variables
@@ -81,7 +82,7 @@ settings after definition or via `customize`:
 
 Each `vtermux-define` call generates five interactive commands.
 Additionally, `vtermux-run` provides a global single-character launcher
-for apps registered with a `:key`.
+for apps with a dispatch key.
 
 #### Per-app Commands
 
@@ -103,16 +104,16 @@ for apps registered with a `:key`.
 
 #### Keybinding generation
 
-When `:key` is a key sequence string (e.g., `"C-c b"`), `vtermux-define`
+When `:bind` is set to a key sequence string, `vtermux-define`
 generates a global keybinding:
 
 ``` elisp
-(vtermux-define btop :key "C-c b")   ;; C-c b launches btop
-(vtermux-define claude :key "C-c c") ;; C-c c launches claude
+(vtermux-define btop :bind "C-c b")    ;; C-c b launches btop
+(vtermux-define claude :bind "C-c c")  ;; C-c c launches claude
 ```
 
 The dispatch key for `vtermux-run` is auto-generated from the app name
-when a chord string is used, so both access methods work.
+and can be overridden with `:dispatch`:
 
 ### Directory resolution
 
@@ -144,7 +145,7 @@ behavior), but you can enter any string.
 ``` elisp
 (require 'vtermux)
 
-(vtermux-define btop :key "C-c b")          ;; C-c b launches btop
+(vtermux-define btop :bind "C-c b")          ;; C-c b launches btop
 (vtermux-define claude :program "claude")   ;; M-x claude
 (vtermux-define opencode :program "opencode"   ;; M-x opencode
                :args "-m" :directory :buffer)

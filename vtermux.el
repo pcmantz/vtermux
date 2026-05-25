@@ -259,14 +259,14 @@ Keyword arguments:
   :directory SYMBOL    - directory resolution method: `:project',
                          `:buffer', or `:prompt'
                          (default: `vtermux-command-directory')
-  :key CHAR-OR-STRING  - dispatch shortcut or keybinding for `vtermux-run'.
-                         A character (e.g., `?b') sets the dispatch key.
-                         A key sequence string (e.g., `\"C-c b\"') defines
-                         a global keybinding.  Default: first unused letter
-                         or letter pair from NAME.
+  :bind STRING         - key sequence string (e.g., `\"C-c b\"') defining
+                         a global keybinding for this app
+  :dispatch CHAR       - override the auto-detected dispatch key for
+                         `vtermux-run' (default: first unused letter
+                         or letter pair from NAME)
 
-`vtermux-run' dispatches to apps by prefix-matching their `:key'.
-Type characters to narrow; `?' shows help, `DEL' backs up.
+`vtermux-run' shows each app's dispatch key in the prompt.
+Type a key to launch immediately, or `?' for help.
 
 Directory resolution:
   With \\[universal-argument], always prompted for a directory.
@@ -276,13 +276,10 @@ Directory resolution:
   (let* ((prog (or (plist-get args :program) (symbol-name name)))
          (bufname (or (plist-get args :buffer-name) (symbol-name name)))
          (cmd-args (plist-get args :args))
-         (raw-key (plist-get args :key))
-         (bind-key (and (stringp raw-key) (not (string-match-p "^.$" raw-key))
-                        raw-key))
-         (key-val (cond ((characterp raw-key) (string raw-key))
-                        (bind-key nil)
-                        ((stringp raw-key) raw-key)
-                        (t nil)))
+         (bind-key (let ((v (plist-get args :bind)))
+                     (and (stringp v) v)))
+         (dispatch-key (let ((v (plist-get args :dispatch)))
+                         (and (characterp v) (string v))))
          (prog-var (intern (format "%s-program" name)))
          (bufname-var (intern (format "%s-buffer-name" name)))
          (args-var (intern (format "%s-args" name)))
@@ -359,12 +356,7 @@ Directory resolution:
 
        (let* ((cell (assq ',name vtermux--registry))
                (key ,(cond
-                      ((plist-member args :key)
-                       (if (characterp (plist-get args :key))
-                           key-val
-                         `(if cell
-                              (nth 2 (cdr cell))
-                            (vtermux--next-key ',name))))
+                      (dispatch-key dispatch-key)
                       (t `(if cell
                               (nth 2 (cdr cell))
                             (vtermux--next-key ',name))))))
@@ -386,7 +378,7 @@ string for `vtermux-run', or nil.")
 (defun vtermux-run (&optional arg)
   "Launch a vtermux application by single-character dispatch.
 
-Press a key matching an app's `:key' to launch it immediately.
+Press a key matching an app's `:dispatch' to launch it immediately.
 Press `?' to show available apps.
 
 With \\[universal-argument], prompt for a directory.

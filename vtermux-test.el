@@ -477,7 +477,7 @@
                           :buffer-name "MyApp"
                           :args "--verbose"
                           :directory :buffer
-                          :key ?m)))
+                          :dispatch ?m)))
     (should (equal myapp-program "/usr/bin/myapp"))
     (should (equal myapp-buffer-name "MyApp"))
     (should (equal myapp-args "--verbose"))
@@ -503,7 +503,7 @@
 
 (ert-deftest vtermux-test--define-with-chord-key ()
   (let ((vtermux--registry nil))
-    (eval (macroexpand '(vtermux-define btop :key "C-c b")))
+    (eval (macroexpand '(vtermux-define btop :bind "C-c b")))
     (let ((entry (cdr (assq 'btop vtermux--registry))))
       (should (equal (car entry) 'btop-program))
       (should (eq (nth 1 entry) 'btop))
@@ -545,7 +545,7 @@
      (let* ((vtermux--registry nil)
             (vtermux-command-directory :buffer)
             (vtermux-kill-buffer-on-exit nil))
-       (eval (macroexpand '(vtermux-define btop :key ?b)))
+       (eval (macroexpand '(vtermux-define btop :dispatch ?b)))
        (setq vtermux-test--completing-read-result "btop")
        (cl-letf (((symbol-function 'vterm-mode) #'vtermux-test--capture-vterm-shell))
          (vtermux-run))
