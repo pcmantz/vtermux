@@ -62,7 +62,7 @@ Pass keyword arguments to `vtermux-define`:
 | `:program` | `symbol-name` of NAME | Executable to run. |
 | `:buffer-name` | `symbol-name` of NAME | Base name for generated buffers. |
 | `:args` | `nil` | Command-line arguments passed to the program. Can be a string or a list of strings. |
-| `:key` | `nil` | Single-character shortcut for `vtermux-run`. |
+| `:key` | auto (first unused letter from NAME) | Dispatch shortcut or keybinding. A character (e.g., `?b`) sets the dispatch key for `vtermux-run`. A key sequence string (e.g., `"C-c b"`) defines a global keybinding. |
 | `:directory` | `vtermux-command-directory` | Directory resolution override for this definition only — see [Directory resolution](#directory-resolution). |
 
 ### Generated customization variables
@@ -99,7 +99,20 @@ for apps registered with a `:key`.
 
 | Command | Description |
 |---|---|
-| `vtermux-run` | Select a vtermux app via `completing-read`. Integrates with ivy/helm/vertico. |
+| `vtermux-run` | Single-character dispatch. Shows colored keys in the prompt. Press a key to launch immediately. Type `?` for help. |
+
+#### Keybinding generation
+
+When `:key` is a key sequence string (e.g., `"C-c b"`), `vtermux-define`
+generates a global keybinding:
+
+``` elisp
+(vtermux-define btop :key "C-c b")   ;; C-c b launches btop
+(vtermux-define claude :key "C-c c") ;; C-c c launches claude
+```
+
+The dispatch key for `vtermux-run` is auto-generated from the app name
+when a chord string is used, so both access methods work.
 
 ### Directory resolution
 
@@ -131,14 +144,15 @@ behavior), but you can enter any string.
 ``` elisp
 (require 'vtermux)
 
-(vtermux-define btop)                          ;; M-x btop, btop-next, etc.
-(vtermux-define claude :program "claude")      ;; M-x claude
+(vtermux-define btop :key "C-c b")          ;; C-c b launches btop
+(vtermux-define claude :program "claude")   ;; M-x claude
 (vtermux-define opencode :program "opencode"   ;; M-x opencode
                :args "-m" :directory :buffer)
 ```
 
-- `M-x btop` — launches btop in the current project.
+- `C-c b` — launches btop in the current project.
 - `M-x btop` again — prompts for a label (default "1") to create a second instance.
 - `M-x btop-next` / `M-x btop-prev` — cycles through scoped instances.
 - `M-x opencode` — runs opencode with `-m` in the current buffer's directory.
 - `C-u M-x opencode` — same, but always prompts for the directory.
+- `M-x vtermux-run` — single-key launcher showing `vtermux b c o:` with colored keys.
