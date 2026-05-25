@@ -379,20 +379,32 @@ RET to confirm.  Works with vertico, ivy, helm, etc.
 With \\[universal-argument], prompt for a directory.
 Otherwise uses the configured directory method."
   (interactive "P")
-  (let* ((candidates
-          (mapcar (lambda (entry)
-                    (let* ((app (car entry))
-                           (key (nth 2 (cdr entry)))
-                           (name (symbol-name app))
-                           (                           display (if key
-                                        (concat (propertize (format "%c " (aref key 0))
-                                                            'face 'font-lock-keyword-face)
-                                                name)
-                                      name)))
-                      (cons display app)))
-                  vtermux--registry))
-         (selected (completing-read "vtermux: " candidates nil t))
-         (app (cdr (assoc selected candidates)))
+  (let* ((names (mapcar (lambda (e) (symbol-name (car e))) vtermux--registry))
+         (key-alist (mapcar (lambda (e)
+                              (cons (symbol-name (car e))
+                                    (and (nth 2 (cdr e))
+                                         (aref (nth 2 (cdr e)) 0))))
+                            vtermux--registry))
+         (selected
+          (completing-read "vtermux: "
+                           (lambda (str pred action)
+                             (if (eq action 'metadata)
+                                 `(metadata
+                                   (affixation-function
+                                    . ,(lambda (cands)
+                                         (mapcar
+                                          (lambda (c)
+                                            (let ((key (cdr (assoc c key-alist))))
+                                              (list c
+                                                    (if key
+                                                        (propertize (format "%c " key)
+                                                                    'face 'font-lock-keyword-face)
+                                                      "")
+                                                    "")))
+                                          cands))))
+                               (complete-with-action action names str pred)))
+                           nil t))
+         (app (intern selected))
          (entry (assq app vtermux--registry))
          (directory (vtermux--command-directory nil arg)))
     (vtermux--launch (symbol-value (cadr entry))
