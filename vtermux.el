@@ -355,7 +355,9 @@ Directory resolution:
        (let* ((cell (assq ',name vtermux--registry))
                (key ,(if (plist-member args :key)
                          key-val
-                       `(vtermux--next-key ',name))))
+                       `(if cell
+                            (nth 2 (cdr cell))
+                          (vtermux--next-key ',name)))))
           (if cell
               (setcdr cell (list ',prog-var ',fn key))
             (push (cons ',name (list ',prog-var ',fn key)) vtermux--registry)))

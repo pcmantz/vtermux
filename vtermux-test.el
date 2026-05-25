@@ -492,3 +492,30 @@
       (should (eq (car old-entry) 'oldapp-program))
       (should (eq (nth 1 old-entry) 'oldapp))
       (should (equal (nth 2 old-entry) "o")))))
+
+;; ─── vtermux--next-key ────────────────────────────────────────────
+
+(ert-deftest vtermux-test--next-key-first-letter ()
+  (let ((vtermux--registry nil))
+    (should (equal (vtermux--next-key 'btop) "b"))))
+
+(ert-deftest vtermux-test--next-key-second-letter ()
+  (let ((vtermux--registry '((btop . (btop-program btop "b")))))
+    (should (equal (vtermux--next-key 'bash) "a"))))
+
+(ert-deftest vtermux-test--next-key-all-singles-used ()
+  (let ((vtermux--registry '((a . (a-program a "b"))
+                             (b . (b-program b "a"))
+                             (c . (c-program c "s"))
+                             (d . (d-program d "h")))))
+    (should (equal (vtermux--next-key 'bash) "ba"))))
+
+(ert-deftest vtermux-test--next-key-partial-collision ()
+  (let ((vtermux--registry '((btop . (btop-program btop "b"))
+                             (xapp . (xapp-program xapp "a")))))
+    (should (equal (vtermux--next-key 'btop) "t"))))
+
+(ert-deftest vtermux-test--next-key-two-letter ()
+  (let ((vtermux--registry '((a . (a-program a "a"))
+                             (b . (b-program b "b")))))
+    (should (equal (vtermux--next-key 'ab) "ab"))))
