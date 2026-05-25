@@ -384,8 +384,8 @@ Otherwise uses the configured directory method."
                     (let* ((app (car entry))
                            (key (nth 2 (cdr entry)))
                            (name (symbol-name app))
-                           (display (if key
-                                        (concat (propertize (format "%s " (aref key 0))
+                           (                           display (if key
+                                        (concat (propertize (format "%c " (aref key 0))
                                                             'face 'font-lock-keyword-face)
                                                 name)
                                       name)))
