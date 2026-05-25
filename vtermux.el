@@ -259,9 +259,11 @@ Keyword arguments:
   :directory SYMBOL    - directory resolution method: `:project',
                          `:buffer', or `:prompt'
                          (default: `vtermux-command-directory')
-  :key CHAR-OR-STRING  - dispatch shortcut for `vtermux-run'
-                         (default: first unused letter or letter pair
-                         from NAME)
+  :key CHAR-OR-STRING  - dispatch shortcut or keybinding for `vtermux-run'.
+                         A character (e.g., `?b') sets the dispatch key.
+                         A key sequence string (e.g., `\"C-c b\"') defines
+                         a global keybinding.  Default: first unused letter
+                         or letter pair from NAME.
 
 `vtermux-run' dispatches to apps by prefix-matching their `:key'.
 Type characters to narrow; `?' shows help, `DEL' backs up.
@@ -274,10 +276,13 @@ Directory resolution:
   (let* ((prog (or (plist-get args :program) (symbol-name name)))
          (bufname (or (plist-get args :buffer-name) (symbol-name name)))
          (cmd-args (plist-get args :args))
-         (key-val (let ((v (plist-get args :key)))
-                    (cond ((characterp v) (string v))
-                          ((stringp v) v)
-                          (t nil))))
+         (raw-key (plist-get args :key))
+         (bind-key (and (stringp raw-key) (not (string-match-p "^.$" raw-key))
+                        raw-key))
+         (key-val (cond ((characterp raw-key) (string raw-key))
+                        (bind-key nil)
+                        ((stringp raw-key) raw-key)
+                        (t nil)))
          (prog-var (intern (format "%s-program" name)))
          (bufname-var (intern (format "%s-buffer-name" name)))
          (args-var (intern (format "%s-args" name)))
@@ -353,14 +358,22 @@ Directory resolution:
                          'prev (or offset 1)))
 
        (let* ((cell (assq ',name vtermux--registry))
-               (key ,(if (plist-member args :key)
-                         key-val
-                       `(if cell
-                            (nth 2 (cdr cell))
-                          (vtermux--next-key ',name)))))
+               (key ,(cond
+                      ((plist-member args :key)
+                       (if (characterp (plist-get args :key))
+                           key-val
+                         `(if cell
+                              (nth 2 (cdr cell))
+                            (vtermux--next-key ',name))))
+                      (t `(if cell
+                              (nth 2 (cdr cell))
+                            (vtermux--next-key ',name))))))
           (if cell
               (setcdr cell (list ',prog-var ',fn key))
             (push (cons ',name (list ',prog-var ',fn key)) vtermux--registry)))
+        ,@(when bind-key
+            `((when (boundp 'global-map)
+                (define-key global-map (kbd ,bind-key) #',fn))))
         ',name)))
 
 (defvar vtermux--registry nil

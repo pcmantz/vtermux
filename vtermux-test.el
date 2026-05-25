@@ -501,6 +501,17 @@
 
 ;; ─── vtermux--next-key ────────────────────────────────────────────
 
+(ert-deftest vtermux-test--define-with-chord-key ()
+  (let ((vtermux--registry nil))
+    (eval (macroexpand '(vtermux-define btop :key "C-c b")))
+    (let ((entry (cdr (assq 'btop vtermux--registry))))
+      (should (equal (car entry) 'btop-program))
+      (should (eq (nth 1 entry) 'btop))
+      ;; dispatch key should be auto-generated from name, not "C-c b"
+      (should (equal (nth 2 entry) "b")))
+    ;; should define a global keybinding
+    (should (lookup-key global-map (kbd "C-c b") nil))))
+
 (ert-deftest vtermux-test--next-key-first-letter ()
   (let ((vtermux--registry nil))
     (should (equal (vtermux--next-key 'btop) "b"))))
