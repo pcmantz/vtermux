@@ -525,7 +525,7 @@
                              (b . (b-program b "a"))
                              (c . (c-program c "s"))
                              (d . (d-program d "h")))))
-    (should (equal (vtermux--next-key 'bash) "ba"))))
+    (should (equal (vtermux--next-key 'bash) "B"))))
 
 (ert-deftest vtermux-test--next-key-partial-collision ()
   (let ((vtermux--registry '((btop . (btop-program btop "b"))
@@ -535,7 +535,7 @@
 (ert-deftest vtermux-test--next-key-two-letter ()
   (let ((vtermux--registry '((a . (a-program a "a"))
                              (b . (b-program b "b")))))
-    (should (equal (vtermux--next-key 'ab) "ab"))))
+    (should (equal (vtermux--next-key 'ab) "A"))))
 
 ;; ─── vtermux-run ────────────────────────────────────────────────────
 

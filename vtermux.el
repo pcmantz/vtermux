@@ -215,30 +215,30 @@ When no buffers exist in DIRECTORY, delegate to `vtermux--launch'."
                           len)))
         (switch-to-buffer (nth target buffers))))))
 
+(defvar vtermux--registry nil
+  "Alist of (NAME . (PROGRAM-VAR FN KEY)) for all defined vtermux applications.
+PROGRAM-VAR is the symbol holding the program name.  FN is the
+generated interactive command symbol.  KEY is the dispatch prefix
+string for `vtermux-run', or nil.")
+
 (defun vtermux--next-key (name)
-  "Return a one or two character default dispatch key for NAME."
+  "Return a single character dispatch key for NAME.
+Steps: name lowercase, name uppercase, a-z, A-Z, 0-9."
   (let* ((used (delq nil (mapcar (lambda (e) (nth 2 (cdr e))) vtermux--registry)))
          (str (symbol-name name))
-         (len (length str))
-         key)
-    ;; First pass: single characters
-    (catch 'found
-      (dotimes (i len)
-        (let ((ch (string (aref str i))))
-          (unless (member ch used)
-            (setq key ch)
-            (throw 'found nil)))))
-    ;; Second pass: two-letter combos
-    (unless key
-      (catch 'found
-        (dotimes (i len)
-          (dotimes (j len)
-            (when (/= i j)
-              (let ((combo (concat (string (aref str i)) (string (aref str j)))))
-                (unless (member combo used)
-                  (setq key combo)
-                  (throw 'found nil))))))))
-    (or key (string (aref str 0)))))
+         (name-lower (cl-remove-if-not (lambda (c) (<= ?a c ?z)) (append str nil)))
+         (find (lambda (chars)
+                 (catch 'found
+                   (dolist (ch chars)
+                     (let ((s (string ch)))
+                       (unless (member s used)
+                         (throw 'found s))))))))
+    (or (funcall find name-lower)
+        (funcall find (mapcar #'upcase name-lower))
+        (funcall find (number-sequence ?a ?z))
+        (funcall find (number-sequence ?A ?Z))
+        (funcall find (number-sequence ?0 ?9))
+        (user-error "No available dispatch key for `%s'" name))))
 
 ;;;###autoload
 (defmacro vtermux-define (name &rest args)
@@ -367,12 +367,6 @@ Directory resolution:
             `((when (boundp 'global-map)
                 (define-key global-map (kbd ,bind-key) #',fn))))
         ',name)))
-
-(defvar vtermux--registry nil
-  "Alist of (NAME . (PROGRAM-VAR FN KEY)) for all defined vtermux applications.
-PROGRAM-VAR is the symbol holding the program name.  FN is the
-generated interactive command symbol.  KEY is the dispatch prefix
-string for `vtermux-run', or nil.")
 
 ;;;###autoload
 (defun vtermux-run (&optional arg)
