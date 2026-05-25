@@ -371,40 +371,35 @@ string for `vtermux-run', or nil.")
 
 ;;;###autoload
 (defun vtermux-run (&optional arg)
-  "Launch a vtermux application by single-character dispatch.
+  "Launch a vtermux application via `completing-read'.
 
-Press a key matching an app's `:key' to launch it immediately.
-Press `?' to show available apps.
+Apps with a `:key' show a colored key prefix.  Type to narrow,
+RET to confirm.  Works with vertico, ivy, helm, etc.
 
 With \\[universal-argument], prompt for a directory.
 Otherwise uses the configured directory method."
   (interactive "P")
-  (let* ((app-keys
-          (delq nil
-                (mapcar (lambda (e)
-                          (when-let* ((k (nth 2 (cdr e))))
-                            (cons (aref k 0) (car e))))
-                        vtermux--registry)))
-         (keys (sort (mapcar #'car app-keys) #'<))
-         (prompt "vtermux: "))
-    (if (null keys)
-        (user-error "No vtermux apps have a :key set")
-      (let ((ch (read-char-choice prompt (append keys '(??)))))
-        (while (eq ch ??)
-          (with-temp-message
-           (mapconcat (lambda (ak) (format "%c: %s" (car ak) (cdr ak)))
-                      (sort (copy-sequence app-keys)
-                            (lambda (a b) (< (car a) (car b))))
-                      "  "))
-          (setq ch (read-char-choice prompt (append keys '(??))))))
-        (let* ((app (cdr (assq ch app-keys)))
-               (entry (assq app vtermux--registry))
-               (directory (vtermux--command-directory nil arg)))
-          (vtermux--launch (symbol-value (cadr entry))
-                           (symbol-value (intern (format "%s-buffer-name" app)))
-                           (symbol-value (intern (format "%s-args" app)))
-                           (intern (format "%s-buffer-list" app))
-                            directory))))))
+  (let* ((candidates
+          (mapcar (lambda (entry)
+                    (let* ((app (car entry))
+                           (key (nth 2 (cdr entry)))
+                           (name (symbol-name app))
+                           (display (if key
+                                        (concat (propertize (format "%s " (aref key 0))
+                                                            'face 'font-lock-keyword-face)
+                                                name)
+                                      name)))
+                      (cons display app)))
+                  vtermux--registry))
+         (selected (completing-read "vtermux: " candidates nil t))
+         (app (cdr (assoc selected candidates)))
+         (entry (assq app vtermux--registry))
+         (directory (vtermux--command-directory nil arg)))
+    (vtermux--launch (symbol-value (cadr entry))
+                     (symbol-value (intern (format "%s-buffer-name" app)))
+                     (symbol-value (intern (format "%s-args" app)))
+                     (intern (format "%s-buffer-list" app))
+                     directory)))
 
 (provide 'vtermux)
 ;;; vtermux.el ends here

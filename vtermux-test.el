@@ -535,7 +535,7 @@
             (vtermux-command-directory :buffer)
             (vtermux-kill-buffer-on-exit nil))
        (eval (macroexpand '(vtermux-define btop :key ?b)))
-       (setq vtermux-test--read-char-choice-result ?b)
+       (setq vtermux-test--completing-read-result "b btop")
        (cl-letf (((symbol-function 'vterm-mode) #'vtermux-test--capture-vterm-shell))
          (vtermux-run))
        (unwind-protect
