@@ -144,12 +144,16 @@ BUFNAME is the base buffer name.  BUF-LIST-SYM is the symbol whose
 value holds the buffer list for this application.
 LABEL is an optional disambiguating string."
   (let* ((name (vtermux--format-buffer-name bufname directory label))
-         (default-directory directory)
-         (vterm-shell (cond
-                        ((null args) prog)
-                        ((stringp args) (format "%s %s" prog args))
-                        ((listp args) (combine-and-quote-strings (cons prog args)))))
-         (buffer (generate-new-buffer name)))
+          (default-directory directory)
+          (vterm-shell (cond
+                         ((null args) prog)
+                         ((stringp args) (format "%s %s" prog args))
+                         ((listp args) (combine-and-quote-strings (cons prog args)))))
+          (buffer (if (and label (get-buffer name))
+                      (user-error "Label %S already in use for %s"
+                                 label (format "*%s - %s*" bufname
+                                               (abbreviate-file-name directory)))
+                    (generate-new-buffer name))))
     (with-current-buffer buffer
       (vterm-mode)
       (when vtermux-kill-buffer-on-exit
