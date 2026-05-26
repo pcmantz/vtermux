@@ -196,13 +196,15 @@ If instances exist, prompts for a label and creates a new one."
      (vtermux--create-buffer prog bufname args buf-list-sym directory label))))
 
 (defun vtermux--select (prog buf-list-sym)
-  "Select a PROG buffer with completing-read."
+  "Select a PROG buffer with completing-read.
+Return the selected buffer, or nil if no buffers exist."
   (let ((buffers (cl-remove-if-not #'buffer-live-p (symbol-value buf-list-sym))))
     (if buffers
         (switch-to-buffer
          (completing-read (format "%s instance: " prog)
                           (mapcar #'buffer-name buffers) nil t))
-      (message "No %s instances running." prog))))
+      (message "No %s instances running." prog)
+	  nil)))
 
 (defun vtermux--cycle (prog bufname args buf-list-sym directory direction offset)
   "Switch DIRECTION by OFFSET in the PROG buffer list scoped to DIRECTORY.
