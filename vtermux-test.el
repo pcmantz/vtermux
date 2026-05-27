@@ -61,11 +61,11 @@
               ((symbol-function 'message)
                (lambda (fmt &rest args)
                  (setq vtermux-test--message-args (cons fmt args))))
-               ((symbol-function 'read-directory-name)
-                (lambda (&rest _) vtermux-test--read-directory-name-result))
-               ((symbol-function 'read-char-choice)
-                (lambda (_prompt _chars)
-                  vtermux-test--read-char-choice-result)))
+              ((symbol-function 'read-directory-name)
+               (lambda (&rest _) vtermux-test--read-directory-name-result))
+              ((symbol-function 'read-char-choice)
+               (lambda (_prompt _chars)
+                 vtermux-test--read-char-choice-result)))
       (funcall fn))))
 
 (defun vtermux-test--capture-vterm-shell (&rest _)
@@ -485,11 +485,11 @@
 (ert-deftest vtermux-test--define-all-keywords ()
   (let ((vtermux--registry nil))
     (eval (macroexpand '(vtermux-define myapp
-                          :program "/usr/bin/myapp"
-                          :buffer-name "MyApp"
-                          :args "--verbose"
-                          :directory :buffer
-                          :dispatch ?m)))
+					:program "/usr/bin/myapp"
+					:buffer-name "MyApp"
+					:args "--verbose"
+					:directory :buffer
+					:dispatch ?m)))
     (should (equal myapp-program "/usr/bin/myapp"))
     (should (equal myapp-buffer-name "MyApp"))
     (should (equal myapp-args "--verbose"))

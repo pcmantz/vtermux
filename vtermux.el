@@ -85,8 +85,8 @@ Third-party backends can register via `vtermux-register-backend'."
 Overridden per-definition with the `:directory' keyword.
 A prefix arg (\\[universal-argument]) always prompts."
   :type '(choice (const :tag "Project root" :project)
-                 (const :tag "Buffer directory" :buffer)
-                 (const :tag "Always prompt" :prompt))
+		 (const :tag "Buffer directory" :buffer)
+		 (const :tag "Always prompt" :prompt))
   :group 'vtermux)
 
 ;; ─── Backend system ────────────────────────────────────────────────
@@ -104,44 +104,47 @@ NAME is a symbol.  CREATE-FN is a function of four arguments:
 is the executable, ARGS is nil/string/list of strings, and
 DIRECTORY is the working directory.  Must return a live buffer."
   (setq vtermux--backends
-        (cons (cons name create-fn)
-              (assq-delete-all name vtermux--backends))))
+	(cons (cons name create-fn)
+	      (assq-delete-all name vtermux--backends))))
 
 ;; Register the built-in vterm backend.
+(defun vtermux--shell-string (prog args)
+  "Combine PROG and ARGS into a shell command string.
+ARGS may be nil, a string, or a list of strings."
+  (cond ((null args) prog)
+	((stringp args) (format "%s %s" prog args))
+	((listp args) (combine-and-quote-strings (cons prog args)))))
+
 (vtermux-register-backend 'vterm
-  (lambda (name prog args directory)
-    (require 'vterm)
-    (let* ((shell (cond ((null args) prog)
-                        ((stringp args) (format "%s %s" prog args))
-                        ((listp args) (combine-and-quote-strings (cons prog args)))))
-           (buffer (generate-new-buffer name)))
-      (with-current-buffer buffer
-        (setq default-directory directory
-              vterm-shell shell)
-        (vterm-mode)
-        (current-buffer)))))
+			  (lambda (name prog args directory)
+			    (require 'vterm)
+			    (let* ((shell (vtermux--shell-string prog args))
+				   (buffer (generate-new-buffer name)))
+			      (with-current-buffer buffer
+				(setq default-directory directory
+				      vterm-shell shell)
+				(vterm-mode)
+				(current-buffer)))))
 
 ;; Register the ghostel backend if available.
 (when (require 'ghostel nil 'noerror)
   (vtermux-register-backend 'ghostel
-    (lambda (name prog args directory)
-      (let* ((words (cons prog (cond ((null args) nil)
-                                    ((stringp args) (split-string args " " t))
-                                    (t args))))
-             (buffer (generate-new-buffer name))
-             (default-directory directory))
-        (ghostel-exec buffer (car words) (cdr words))
-        buffer))))
+			    (lambda (name prog args directory)
+			      (let* ((words (cons prog (cond ((null args) nil)
+							     ((stringp args) (split-string args " " t))
+							     (t args))))
+				     (buffer (generate-new-buffer name))
+				     (default-directory directory))
+				(ghostel-exec buffer (car words) (cdr words))
+				buffer))))
 
 ;; Register the term backend (built-in, always available).
 (vtermux-register-backend 'term
-  (lambda (name prog args directory)
-    (let* ((shell (cond ((null args) prog)
-                        ((stringp args) (format "%s %s" prog args))
-                        ((listp args) (combine-and-quote-strings (cons prog args)))))
-           (default-directory directory))
-      (ansi-term shell name)
-      (get-buffer name))))
+			  (lambda (name prog args directory)
+			    (let* ((shell (vtermux--shell-string prog args))
+				   (default-directory directory))
+			      (ansi-term shell name)
+			      (get-buffer name))))
 
 (defun vtermux--command-directory (&optional method prompt)
   "Resolve working directory for a vtermux command.
@@ -150,8 +153,8 @@ When PROMPT is non-nil, always ask the user.
 Falls back to prompting the user on failure."
   (condition-case nil
       (if (or prompt (eq method :prompt))
-          (read-directory-name "Directory: " default-directory nil t)
-        (let ((effective (if (memq method '(:project :buffer :prompt))
+	  (read-directory-name "Directory: " default-directory nil t)
+	(let ((effective (if (memq method '(:project :buffer :prompt))
                              method
                            vtermux-command-directory)))
           (pcase effective
@@ -171,7 +174,7 @@ Extracts numeric labels from buffer names matching the vtermux
   (let (nums)
     (dolist (buf buffers)
       (when (and (buffer-live-p buf)
-                 (string-match " (\\([0-9]+\\))\\*\\'" (buffer-name buf)))
+		 (string-match " (\\([0-9]+\\))\\*\\'" (buffer-name buf)))
         (push (string-to-number (match-string 1 (buffer-name buf))) nums)))
     (setq nums (sort (cl-delete-duplicates nums :test #'=) #'<))
     (number-to-string
@@ -179,7 +182,7 @@ Extracts numeric labels from buffer names matching the vtermux
        (let ((i 1))
          (dolist (n nums)
            (when (/= n i) (throw 'next i))
-            (setq i (1+ i)))
+           (setq i (1+ i)))
          i)))))
 
 ;;; Shared implementation functions
@@ -190,7 +193,7 @@ BUFNAME is the base buffer name.  DIRECTORY is the working directory.
 LABEL is an optional disambiguating string."
   (let ((root (abbreviate-file-name directory)))
     (if label
-        (format "*%s - %s (%s)*" bufname root label)
+	(format "*%s - %s (%s)*" bufname root label)
       (format "*%s - %s*" bufname root))))
 
 (defun vtermux--buffers (bufname buf-list &optional directory)
@@ -217,8 +220,8 @@ BACKEND is the terminal backend symbol (defaults to `vtermux-backend')."
       (user-error "Unknown vtermux backend: %S" (or backend vtermux-backend)))
     (when (and label (get-buffer name))
       (user-error "Label %S already in use for %s"
-                  label (format "*%s - %s*" bufname
-                                (abbreviate-file-name directory))))
+		  label (format "*%s - %s*" bufname
+				(abbreviate-file-name directory))))
     (let ((buffer (funcall create-fn name prog args directory)))
       (unless (buffer-live-p buffer)
         (error "Backend %S did not return a live buffer" (or backend vtermux-backend)))
@@ -231,10 +234,10 @@ BACKEND is the terminal backend symbol (defaults to `vtermux-backend')."
                (when (string-match "\\(finished\\|exited\\)" change)
                  (kill-buffer (process-buffer proc)))))))
         (add-hook 'kill-buffer-hook
-                  (lambda ()
-                    (set buf-list-sym
-                         (delq (current-buffer) (symbol-value buf-list-sym))))
-                  nil t))
+		  (lambda ()
+		    (set buf-list-sym
+			 (delq (current-buffer) (symbol-value buf-list-sym))))
+		  nil t))
       (set buf-list-sym (nconc (symbol-value buf-list-sym) (list buffer)))
       buffer)))
 
@@ -245,9 +248,9 @@ BACKEND is the terminal backend symbol (defaults to `vtermux-backend')."
   (let* ((buf-list (symbol-value buf-list-sym))
          (existing (vtermux--buffers bufname buf-list directory)))
     (if existing
-        (let* ((default-label (vtermux--next-label existing))
+	(let* ((default-label (vtermux--next-label existing))
                (label (read-string (format "Label for new %s instance: " prog)
-                                   nil nil default-label)))
+				   nil nil default-label)))
           (switch-to-buffer
            (vtermux--create-buffer prog bufname args buf-list-sym directory label backend)))
       (switch-to-buffer
@@ -260,7 +263,7 @@ BACKEND is the terminal backend symbol (defaults to `vtermux-backend')."
          (existing (vtermux--buffers bufname buf-list directory))
          (default-label (vtermux--next-label existing))
          (label (read-string (format "Label for new %s instance: " prog)
-                             nil nil default-label)))
+			     nil nil default-label)))
     (switch-to-buffer
      (vtermux--create-buffer prog bufname args buf-list-sym directory label backend))))
 
@@ -269,11 +272,11 @@ BACKEND is the terminal backend symbol (defaults to `vtermux-backend')."
 Return the selected buffer, or nil if no buffers exist."
   (let ((buffers (cl-remove-if-not #'buffer-live-p (symbol-value buf-list-sym))))
     (if buffers
-        (switch-to-buffer
+	(switch-to-buffer
          (completing-read (format "%s instance: " prog)
-                          (mapcar #'buffer-name buffers) nil t))
+			  (mapcar #'buffer-name buffers) nil t))
       (message "No %s instances running." prog)
-	  nil)))
+      nil)))
 
 (defun vtermux--cycle (prog bufname args buf-list-sym directory direction offset &optional backend)
   "Switch DIRECTION by OFFSET in the PROG buffer list scoped to DIRECTORY.
@@ -282,7 +285,7 @@ BACKEND is the terminal backend symbol (defaults to `vtermux-backend')."
   (let* ((buf-list (symbol-value buf-list-sym))
          (buffers (vtermux--buffers bufname buf-list directory)))
     (if (null buffers)
-        (vtermux--launch prog bufname args buf-list-sym directory backend)
+	(vtermux--launch prog bufname args buf-list-sym directory backend)
       (let* ((len (length buffers))
              (idx (cl-position (current-buffer) buffers))
              (target (mod (if (eq direction 'next)
@@ -311,11 +314,11 @@ Steps: name lowercase, name uppercase, a-z, A-Z, 0-9."
                        (unless (member s used)
                          (throw 'found s))))))))
     (or (funcall find name-lower)
-        (funcall find (mapcar #'upcase name-lower))
-        (funcall find (number-sequence ?a ?z))
-        (funcall find (number-sequence ?A ?Z))
-        (funcall find (number-sequence ?0 ?9))
-        (user-error "No available dispatch key for `%s'" name))))
+	(funcall find (mapcar #'upcase name-lower))
+	(funcall find (number-sequence ?a ?z))
+	(funcall find (number-sequence ?A ?Z))
+	(funcall find (number-sequence ?0 ?9))
+	(user-error "No available dispatch key for `%s'" name))))
 
 ;;;###autoload
 (defmacro vtermux-define (name &rest args)
@@ -384,36 +387,36 @@ Directory resolution:
          :type 'string
          :group 'vtermux)
        (defcustom ,args-var ,cmd-args
-          ,(format "Command line arguments for `%s'." name)
-          :type '(choice (const :tag "None" nil) string (repeat :tag "List of arguments" string))
-          :group 'vtermux)
+         ,(format "Command line arguments for `%s'." name)
+         :type '(choice (const :tag "None" nil) string (repeat :tag "List of arguments" string))
+         :group 'vtermux)
        (defvar ,buf-list-var nil
          ,(format "List of `%s' vterm buffers." name))
-        (defvar ,directory-var ',directory-val
-          ,(format "Directory method for `%s' (`:project', `:buffer', `:prompt', or default)." name))
-        (defvar ,backend-var ',backend-val
-          ,(format "Terminal backend for `%s'." name))
+       (defvar ,directory-var ',directory-val
+         ,(format "Directory method for `%s' (`:project', `:buffer', `:prompt', or default)." name))
+       (defvar ,backend-var ',backend-val
+         ,(format "Terminal backend for `%s'." name))
 
        ;;;###autoload
-          (defun ,fn (&optional arg)
-            ,(concat
-              (format "Launch %s.\n\n" prog)
-              "With \\[universal-argument], prompt for a directory.
+       (defun ,fn (&optional arg)
+         ,(concat
+           (format "Launch %s.\n\n" prog)
+           "With \\[universal-argument], prompt for a directory.
          Otherwise uses the configured directory method.")
-           (interactive "P")
-           (vtermux--launch ,prog-var ,bufname-var ,args-var
-                            ',buf-list-var
-                            (vtermux--command-directory ,directory-var arg)
-                            ,(or backend-val 'vtermux-backend)))
+         (interactive "P")
+         (vtermux--launch ,prog-var ,bufname-var ,args-var
+			  ',buf-list-var
+			  (vtermux--command-directory ,directory-var arg)
+			  ,(or backend-val 'vtermux-backend)))
 
        ;;;###autoload
        (defun ,fn-new (&optional arg)
-          ,(format "Create a new %s instance." prog)
-          (interactive "P")
-          (vtermux--launch-new ,prog-var ,bufname-var ,args-var
-                               ',buf-list-var
-                               (vtermux--command-directory ,directory-var arg)
-                               ,(or backend-val 'vtermux-backend)))
+         ,(format "Create a new %s instance." prog)
+         (interactive "P")
+         (vtermux--launch-new ,prog-var ,bufname-var ,args-var
+			      ',buf-list-var
+			      (vtermux--command-directory ,directory-var arg)
+			      ,(or backend-val 'vtermux-backend)))
 
        ;;;###autoload
        (defun ,fn-select ()
@@ -421,43 +424,43 @@ Directory resolution:
          (interactive)
          (vtermux--select ,prog-var ',buf-list-var))
 
-       ;;;###autoload
-        (defun ,fn-next (&optional offset)
-          ,(format "Switch to the next %s buffer, skipping OFFSET buffers." prog)
-          (interactive "P")
-          (vtermux--cycle ,prog-var ,bufname-var ,args-var
-                          ',buf-list-var
-                          (vtermux--command-directory ,directory-var)
-                          'next (or offset 1)
-                          ,(or backend-val 'vtermux-backend)))
+        ;;;###autoload
+       (defun ,fn-next (&optional offset)
+         ,(format "Switch to the next %s buffer, skipping OFFSET buffers." prog)
+         (interactive "P")
+         (vtermux--cycle ,prog-var ,bufname-var ,args-var
+			 ',buf-list-var
+			 (vtermux--command-directory ,directory-var)
+			 'next (or offset 1)
+			 ,(or backend-val 'vtermux-backend)))
 
-       ;;;###autoload
+        ;;;###autoload
        (defun ,fn-prev (&optional offset)
-          ,(format "Switch to the previous %s buffer, skipping OFFSET buffers." prog)
-          (interactive "P")
-          (vtermux--cycle ,prog-var ,bufname-var ,args-var
-                          ',buf-list-var
-                          (vtermux--command-directory ,directory-var)
-                          'prev (or offset 1)
-                          ,(or backend-val 'vtermux-backend)))
+         ,(format "Switch to the previous %s buffer, skipping OFFSET buffers." prog)
+         (interactive "P")
+         (vtermux--cycle ,prog-var ,bufname-var ,args-var
+			 ',buf-list-var
+			 (vtermux--command-directory ,directory-var)
+			 'prev (or offset 1)
+			 ,(or backend-val 'vtermux-backend)))
 
        (let* ((cell (assq ',name vtermux--registry))
-               (key ,(cond
-                       (dispatch-key dispatch-key)
-                       (t `(if cell
-                               (nth 2 (cdr cell))
-                             (vtermux--next-key ',name)))))
-               (backend ,(if (plist-member args :backend)
-                             `',backend-val
-                           `(if cell
-                                (nth 3 (cdr cell))
-                              nil))))
-          (if cell
-              (setcdr cell (list ',prog-var ',fn key backend))
-            (push (cons ',name (list ',prog-var ',fn key backend)) vtermux--registry)))
-        ,@(when bind-key
-            `((define-key global-map (kbd ,bind-key) #',fn)))
-        ',name)))
+              (key ,(cond
+                     (dispatch-key dispatch-key)
+                     (t `(if cell
+                             (nth 2 (cdr cell))
+                           (vtermux--next-key ',name)))))
+              (backend ,(if (plist-member args :backend)
+                            `',backend-val
+                          `(if cell
+                               (nth 3 (cdr cell))
+                             nil))))
+         (if cell
+             (setcdr cell (list ',prog-var ',fn key backend))
+           (push (cons ',name (list ',prog-var ',fn key backend)) vtermux--registry)))
+       ,@(when bind-key
+           `((define-key global-map (kbd ,bind-key) #',fn)))
+       ',name)))
 
 ;;;###autoload
 (defun vtermux-run (&optional arg)
@@ -471,36 +474,36 @@ Otherwise uses the configured directory method."
   (interactive "P")
   (let* ((app-keys
           (delq nil
-                (mapcar (lambda (e)
-                          (when-let* ((k (nth 2 (cdr e))))
+		(mapcar (lambda (e)
+			  (when-let* ((k (nth 2 (cdr e))))
                             (cons (aref k 0) (car e))))
-                        vtermux--registry)))
+			vtermux--registry)))
          (keys (sort (mapcar #'car app-keys) #'<))
          (prompt
           (concat "vtermux "
-                  (mapconcat (lambda (k)
+		  (mapconcat (lambda (k)
                                (propertize (format "%c" k)
-                                           'face 'font-lock-keyword-face))
-                             keys " ")
-                  ": ")))
+					   'face 'font-lock-keyword-face))
+			     keys " ")
+		  ": ")))
     (if (null keys)
-        (user-error "No vtermux apps have a :dispatch set")
+	(user-error "No vtermux apps have a :dispatch set")
       (let ((ch (read-char-choice prompt (append keys '(??)))))
         (while (eq ch ??)
           (with-temp-message
               (mapconcat (lambda (ak) (format "%c: %s" (car ak) (cdr ak)))
-                         (sort (copy-sequence app-keys)
-                               (lambda (a b) (< (car a) (car b))))
-                         "  ")
+			 (sort (copy-sequence app-keys)
+			       (lambda (a b) (< (car a) (car b))))
+			 "  ")
             (setq ch (read-char-choice prompt (append keys '(??))))))
         (let* ((app (cdr (assq ch app-keys)))
                (entry (assq app vtermux--registry))
                (directory (vtermux--command-directory nil arg)))
           (vtermux--launch (symbol-value (cadr entry))
-                           (symbol-value (intern (format "%s-buffer-name" app)))
-                           (symbol-value (intern (format "%s-args" app)))
-                           (intern (format "%s-buffer-list" app))
-                           directory))))))
+			   (symbol-value (intern (format "%s-buffer-name" app)))
+			   (symbol-value (intern (format "%s-args" app)))
+			   (intern (format "%s-buffer-list" app))
+			   directory))))))
 
 (provide 'vtermux)
 ;;; vtermux.el ends here
