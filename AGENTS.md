@@ -43,12 +43,12 @@ generates named vterm-based terminal commands.
 
 ### File Architecture
 
-- `vtermux.el` (415 lines) — the entire package
-- `vtermux-test.el` (558 lines) — ERT test suite (44 tests)
+- `vtermux.el` (489 lines) — the entire package
+- `vtermux-test.el` (558 lines) — ERT test suite (45 tests)
 
 ### Core Macro: `vtermux-define`
 
-**(vtermux-define NAME &key :program :buffer-name :args :directory :bind :dispatch)**
+**(vtermux-define NAME &key :program :buffer-name :args :directory :bind :dispatch :backend)**
 
 Generates five interactive commands per definition:
 
@@ -62,6 +62,7 @@ Generates five interactive commands per definition:
 
 Also creates per-definition customization vars:
 - `NAME-program`, `NAME-buffer-name`, `NAME-args`, `NAME-command-directory`
+- `NAME-backend` (defvar, terminal backend symbol)
 - `NAME-buffer-list` (defvar, holds live buffer objects)
 
 ### Private Helper Functions
@@ -72,11 +73,13 @@ Also creates per-definition customization vars:
 | `vtermux--next-label` | (buffers) | Auto-numbers labels: finds smallest missing positive integer from existing buffer names matching ` (N)*` suffix. |
 | `vtermux--format-buffer-name` | (bufname directory &optional label) | Formats `*<base> - <dir>*` or `*<base> - <dir> (<label>)*`. |
 | `vtermux--buffers` | (bufname buf-list &optional directory) | Filters live buffers matching prefix. When directory is nil, returns all live. |
-| `vtermux--create-buffer` | (prog bufname args buf-list-sym directory &optional label) | Creates vterm buffer in directory. Sets sentinel to kill on process exit. Adds kill-buffer-hook to clean buffer-list. |
-| `vtermux--launch` | (prog bufname args buf-list-sym directory) | If buffers exist in scope, prompts for label and creates new. Otherwise creates first instance. |
-| `vtermux--launch-new` | (prog bufname args buf-list-sym directory) | Always creates new, always prompts for label. |
-| `vtermux--select` | (prog buf-list-sym) | `completing-read` from live buffers. |
-| `vtermux--cycle` | (prog bufname args buf-list-sym directory direction offset) | Scoped cycling. If no buffers in scope, delegates to `vtermux--launch`. |
+| `vtermux--create-buffer` | (prog bufname args buf-list-sym directory &optional label backend) | Creates terminal buffer via registered backend. Sets sentinel to kill on process exit. Adds kill-buffer-hook to clean buffer-list. |
+| `vtermux--launch` | (prog bufname args buf-list-sym directory &optional backend) | If buffers exist in scope, prompts for label and creates new. Otherwise creates first instance. |
+| `vtermux--launch-new` | (prog bufname args buf-list-sym directory &optional backend) | Always creates new, always prompts for label. |
+| `vtermux--select` | (prog buf-list-sym) | `completing-read` from live buffers. Returns nil if none. |
+| `vtermux--cycle` | (prog bufname args buf-list-sym directory direction offset &optional backend) | Scoped cycling. If no buffers in scope, delegates to `vtermux--launch`. |
+| `vtermux--next-key` | (name) | Computes auto-dispatch key: name lowercase, name uppercase, a-z, A-Z, 0-9. |
+| `vtermux-register-backend` | (name create-fn) | Register a terminal backend. CREATE-FN receives (name prog args directory). |
 
 ### Buffer Naming Convention
 
@@ -110,7 +113,7 @@ On error (e.g., no project found), falls back to `read-directory-name`.
 
 ### Buffer Lifecycle
 
-1. **Creation**: `vtermux--create-buffer` calls `generate-new-buffer`, enters `vterm-mode`, sets `vterm-shell` to program+args.
+1. **Creation**: `vtermux--create-buffer` calls the registered backend's create function, which returns a live terminal buffer.
 2. **Exit**: Process sentinel kills buffer when process finishes/exits (if `vtermux-kill-buffer-on-exit` is non-nil).
 3. **Cleanup**: `kill-buffer-hook` (buffer-local) removes the buffer from `NAME-buffer-list`.
 4. All interactions with the buffer list use `cl-remove-if-not` with `buffer-live-p`, so stale entries are harmless but still cleaned by the hook.
@@ -123,19 +126,21 @@ On error (e.g., no project found), falls back to `read-directory-name`.
 
 ### Limitations / Known Design Decisions
 
-- **ERT test suite** in `vtermux-test.el` (44 tests). Tests mock `vterm-mode` with a `define-derived-mode` stub so they don't need the native `vterm-module`. Run with: `emacs -batch -L . -l vtermux-test.el -f ert-run-tests-batch-and-exit`
+- **ERT test suite** in `vtermux-test.el` (45 tests). Tests mock `vterm-mode` with a `define-derived-mode` stub so they don't need the native `vterm-module`. Run with: `emacs -batch -L . -l vtermux-test.el -f ert-run-tests-batch-and-exit`
 
 - **`:args` can be a string or a list of strings**. Strings are concatenated with program via `(format "%s %s" prog args)`. Lists are joined via `combine-and-quote-strings` for proper shell quoting.
 - **Buffer list is a plain defvar** — not a `defcustom`. Resets to nil on package reload.
-- **Registry (`vtermux--registry`)** stores `(NAME . (PROGRAM-VAR FN KEY))` for all defined vtermux applications. Used by `vtermux-run` for single-character dispatch.
+- **Registry (`vtermux--registry`)** stores `(NAME . (PROGRAM-VAR FN KEY BACKEND))` for all defined vtermux applications. Used by `vtermux-run` for single-character dispatch.
 - **`:bind` keyword on `vtermux-define`** registers a global keybinding. Example: `(vtermux-define btop :bind "C-c b")`.
 - **`:dispatch` keyword on `vtermux-define`** overrides the auto-detected dispatch key for `vtermux-run`. Example: `(vtermux-define btop :dispatch ?b)`.
+- **`:backend` keyword on `vtermux-define`** overrides the terminal backend per-app. Example: `(vtermux-define btop :backend ghostel)`.
+- **Pluggable backends** via `vtermux-register-backend`. Built-in backends: `vterm` (default), `ghostel`, `term`. Third-party backends can register their own.
 - `vtermux-command-directory` `defcustom` defaults to `:project` but the `vtermux--command-directory` function also handles the symbol `'default` (from per-definition `:directory` not being set) via a pcase that falls through to the global default.
 
 ### Emacs & Package Baseline
 
 - Emacs 29.1 minimum (lexical-binding: t)
-- External dependency: `vterm` (any version)
+- External dependency: `vterm` (any version, optional — only needed for `vterm` backend)
 - Standard library: `cl-lib`
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->

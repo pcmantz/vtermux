@@ -5,14 +5,15 @@ Embed and manage multiple named instances of the same terminal application in Em
 ## Introduction
 
 Thanks to modern LLM-powered development, new terminal applications are being cranked out every day.
-One can already embed these in Emacs with `vterm` and `multi-vterm`, but cycling through `vterm
-<1>`, `vterm <2>`, and `vterm <3>` gets really tedious. `multi-vterm` helps, but it provides only
+One can already embed these in Emacs with terminal emulators like `vterm` or `ghostel`, but
+cycling through their generic buffer names gets tedious. `multi-vterm` helps, but it provides only
 one terminal per directory, which if you are running multiple applications in a project or directory
 (e.g., your preferred shell and LLM agent), then you already have to do some hackery to get that to
 work.
 
 Enter `vtermux`. Multiple different TUI and CLI applications can be configured to run with their own
-commands, independently of each other. And if that isn't enough, more instances of the same application can be created and labeled.
+commands, independently of each other. And if that isn't enough, more instances of the same application can be created and labeled. The terminal backend is pluggable — use
+`vterm`, `ghostel`, or `term`.
 
 ## Installation
 
@@ -20,7 +21,6 @@ commands, independently of each other. And if that isn't enough, more instances 
 (use-package vtermux
   :ensure nil
   :elpaca (vtermux :host nil :repo "~/git/vtermux")
-  :after vterm
   :config
   ;; shells
   (vtermux-define bash)
@@ -32,7 +32,7 @@ commands, independently of each other. And if that isn't enough, more instances 
   (vtermux-define opencode :args "-m")
 
   ;; ops tools
-  (vtermux-define btop)
+  (vtermux-define btop :backend ghostel)
   (vtermux-define htop))
 ```
 
@@ -42,6 +42,7 @@ commands, independently of each other. And if that isn't enough, more instances 
 
 | Custom variable | Default | Description |
 |---|---|---|
+| `vtermux-backend` | auto (`vterm` if available, else `term`) | Terminal backend: `vterm`, `ghostel`, or `term`. |
 | `vtermux-kill-buffer-on-exit` | `t` | Kill the buffer when the underlying process exits. Set to `nil` to keep dead buffers. |
 | `vtermux-command-directory` | `:project` | Directory resolution method — see [Directory resolution](#directory-resolution). |
 
@@ -64,6 +65,7 @@ Pass keyword arguments to `vtermux-define`:
 | `:args` | `nil` | Command-line arguments passed to the program. Can be a string or a list of strings. |
 | `:bind` | `nil` | Key sequence string (e.g., `"C-c b"`) defining a global keybinding for this app. |
 | `:dispatch` | auto (first unused letter from NAME) | Override the auto-detected dispatch key for `vtermux-run`. A character (e.g., `?b`). |
+| `:backend` | `vtermux-backend` | Terminal backend override: `vterm`, `ghostel`, or `term`. |
 | `:directory` | `vtermux-command-directory` | Directory resolution override for this definition only — see [Directory resolution](#directory-resolution). |
 
 ### Generated customization variables
@@ -74,6 +76,7 @@ settings after definition or via `customize`:
 - `NAME-program`
 - `NAME-buffer-name`
 - `NAME-args`
+- `NAME-backend`
 - `NAME-command-directory`
 
 ## Usage
@@ -115,6 +118,47 @@ generates a global keybinding:
 The dispatch key for `vtermux-run` is auto-generated from the app name
 and can be overridden with `:dispatch`:
 
+``` elisp
+(vtermux-define btop :bind "C-c b" :dispatch ?t)  ;; dispatch with t, not b
+```
+
+### Backends
+
+`vtermux` supports multiple terminal backends. The default is `vterm`.
+
+| Backend | Dependency | Notes |
+|---|---|---|
+| `vterm` | `vterm` (C module) | Fast, feature-rich. Requires compilation. Default. |
+| `ghostel` | `ghostel` (Rust/libghostty) | Modern, uses Ghostty's library. |
+| `term` | built-in | No extra dependencies. Slower, but always available. |
+
+Set the global default:
+
+``` elisp
+(setq vtermux-backend 'ghostel)
+```
+
+Override per-app with `:backend`:
+
+``` elisp
+(vtermux-define btop :backend ghostel)
+(vtermux-define bash :backend term)
+```
+
+Third-party backends can register via `vtermux-register-backend`:
+
+``` elisp
+(vtermux-register-backend 'my-backend
+  (lambda (name prog args directory)
+    ;; Create a terminal buffer named NAME running PROG with ARGS at DIRECTORY.
+    ;; Return the live buffer.
+    ...))
+```
+
+The create function receives four arguments: the desired buffer name, the
+program executable string, the arguments (nil, string, or list of strings),
+and the working directory. It must return a live buffer.
+
 ### Directory resolution
 
 The working directory for a terminal instance is resolved in one of three ways:
@@ -145,10 +189,11 @@ behavior), but you can enter any string.
 ``` elisp
 (require 'vtermux)
 
-(vtermux-define btop :bind "C-c b")          ;; C-c b launches btop
-(vtermux-define claude :program "claude")   ;; M-x claude
-(vtermux-define opencode :program "opencode"   ;; M-x opencode
+(vtermux-define btop :bind "C-c b")             ;; C-c b launches btop
+(vtermux-define claude :program "claude")       ;; M-x claude
+(vtermux-define opencode :program "opencode"    ;; M-x opencode
                :args "-m" :directory :buffer)
+(vtermux-define htop :backend ghostel)          ;; uses ghostel instead of vterm
 ```
 
 - `C-c b` — launches btop in the current project.
