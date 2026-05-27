@@ -42,7 +42,7 @@ commands, independently of each other. And if that isn't enough, more instances 
 
 | Custom variable | Default | Description |
 |---|---|---|
-| `vtermux-backend` | auto (`vterm` if available, else `term`) | Terminal backend: `vterm`, `ghostel`, or `term`. |
+| `vtermux-backend` | auto (`vterm`→`ghostel`→`term`, first installed) | Terminal backend: `vterm`, `ghostel`, or `term`. |
 | `vtermux-kill-buffer-on-exit` | `t` | Kill the buffer when the underlying process exits. Set to `nil` to keep dead buffers. |
 | `vtermux-command-directory` | `:project` | Directory resolution method — see [Directory resolution](#directory-resolution). |
 

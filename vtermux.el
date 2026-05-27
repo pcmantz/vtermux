@@ -58,7 +58,14 @@
   "Manage multiple vterm-based application instances."
   :group 'tools)
 
-(defcustom vtermux-backend (if (require 'vterm nil 'noerror) 'vterm 'term)
+(defun vtermux--detect-backend ()
+  "Return the first installed backend: vterm, ghostel, term."
+  (cond
+   ((require 'vterm nil 'noerror) 'vterm)
+   ((require 'ghostel nil 'noerror) 'ghostel)
+   (t 'term)))
+
+(defcustom vtermux-backend (vtermux--detect-backend)
   "Terminal emulator backend for creating terminal buffers.
 Built-in backends: `vterm', `ghostel', `term'.
 Third-party backends can register via `vtermux-register-backend'."
