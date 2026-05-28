@@ -124,13 +124,14 @@ and can be overridden with `:dispatch`:
 
 ### Backends
 
-`vtermux` supports multiple terminal backends. The default is `vterm`.
+`vtermux` supports multiple terminal backends. The default is auto-detected:
+`vterm` → `ghostel` → `term`, picking the first one installed.
 
 | Backend | Dependency | Notes |
 |---|---|---|
-| `vterm` | `vterm` (C module) | Fast, feature-rich. Requires compilation. Default. |
+| `vterm` | `vterm` (C module) | Fast, feature-rich. Requires compilation. Default when installed. |
 | `ghostel` | `ghostel` (Rust/libghostty) | Modern, uses Ghostty's library. |
-| `term` | built-in | No extra dependencies. Slower, but always available. |
+| `term` | built-in | No extra dependencies. Slower, but always available as fallback. |
 
 Set the global default:
 
