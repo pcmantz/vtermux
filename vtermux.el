@@ -133,9 +133,14 @@ ARGS may be nil, a string, or a list of strings."
 			      (let* ((words (cons prog (cond ((null args) nil)
 							     ((stringp args) (split-string args " " t))
 							     (t args))))
-				     (buffer (generate-new-buffer name))
-				     (default-directory directory))
-				(ghostel-exec buffer (car words) (cdr words))
+				     (buffer (generate-new-buffer name)))
+				(with-current-buffer buffer
+				  (add-hook 'ghostel-pre-spawn-hook
+					    (lambda ()
+					      (setq-local ghostel-set-title-function nil))
+					    nil t))
+				(let ((default-directory directory))
+				  (ghostel-exec buffer (car words) (cdr words)))
 				buffer))))
 
 ;; Register the term backend (built-in, always available).
