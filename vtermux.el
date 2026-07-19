@@ -3,7 +3,7 @@
 ;; Author: Paul C. Mantz
 ;; Keywords: terminals, processes
 ;; Version: 0.1
-;; Package-Requires: ((emacs "29.1") (vterm "0.0"))
+;; Package-Requires: ((emacs "29.1"))
 
 ;;; Commentary:
 ;; Provides `vtermux-define', a macro to declaratively define
